@@ -1,0 +1,47 @@
+_target_: src.datamodules.RomeDatamodule
+
+batch_size: 10
+num_workers: 15
+
+dataset_main_paths:
+  - ${oc.env:ROME_OUT_DIR}
+  - ${oc.env:OSLO_OUT_DIR}
+train_dataset_json_paths:
+  - ${oc.env:ROME_SPLITS_PATH}/train.json
+  - ${oc.env:OSLO_ONLY_TRAIN_PATH}/train.json
+hard_val_json_paths:
+  - ${oc.env:ROME_SPLITS_PATH}/hard_val.json
+  - ${oc.env:OSLO_ONLY_TRAIN_PATH}/hard_val.json
+hard_test_json_paths:
+  - ${oc.env:ROME_SPLITS_PATH}/hard_test.json
+  - ${oc.env:OSLO_ONLY_TRAIN_PATH}/hard_test.json
+medium_val_json_paths:
+  - ${oc.env:ROME_SPLITS_PATH}/medium_val.json
+  - ${oc.env:OSLO_ONLY_TRAIN_PATH}/medium_val.json
+medium_test_json_paths:
+  - ${oc.env:ROME_SPLITS_PATH}/medium_test.json
+  - ${oc.env:OSLO_ONLY_TRAIN_PATH}/medium_test.json
+easy_val_json_paths:
+  - ${oc.env:ROME_SPLITS_PATH}/easy_val.json
+  - ${oc.env:OSLO_ONLY_TRAIN_PATH}/easy_val.json
+easy_test_json_paths:
+  - ${oc.env:ROME_SPLITS_PATH}/easy_test.json
+  - ${oc.env:OSLO_ONLY_TRAIN_PATH}/easy_test.json
+
+min_num_bs: 3
+max_num_bs: 9999
+hard_campaign: "5"
+hard_train_ratio: 0.0
+dataset_types: [ dataSet, dataSet ]
+map_size: 224
+features:
+  - RSSI
+  - NSINR
+  - NRSRP
+  - NRSRQ
+output_gaussian_sigma: 3.0
+decimal_places: 10
+eps_image: 3
+for_viz: False
+map_channels: buildings # buildings, roads, both
+crops_per_epoch: 5

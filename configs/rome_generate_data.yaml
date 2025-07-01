@@ -1,0 +1,24 @@
+# @package _global_
+name: rome_generate_data
+seed: 0
+print_config: True
+ignore_warnings: False
+
+mat_file: ${oc.env:ROME_MAT_FILE}
+cell_file: ${oc.env:ROME_CELL_FILE}
+out_dir: ${oc.env:ROME_OUT_DIR}
+random_point_scale_factor: 0.9
+nsew: [ 41.89, 41.81, 12.50, 12.43 ]
+num_workers: 8
+
+num_points: 1500000
+random_size_mean: 300
+random_size_std: 0
+random_size_min: 100
+random_size_max: 800
+
+hydra:
+  run:
+    dir: ${oc.env:OUTPUT_DIR}/${now:%Y-%m-%d_%H-%M-%S}
+  job:
+    chdir: True

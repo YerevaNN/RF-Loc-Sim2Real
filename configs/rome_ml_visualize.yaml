@@ -1,0 +1,16 @@
+# @package _global_
+name: rome_ml_visualize
+seed: 0
+print_config: True
+ignore_warnings: True
+
+pred_dir: ${oc.env:ROME_PRED_DIR}
+subdirs: [1]
+default_num_points: 100
+
+hydra:
+  run:
+    dir: ${oc.env:OUTPUT_DIR}/${now:%Y-%m-%d_%H-%M-%S}
+  job:
+    chdir: True
+
