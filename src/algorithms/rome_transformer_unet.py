@@ -1,8 +1,13 @@
+import io
 import logging
+from typing import Any, IO, Optional, Union
 
 import torch
 import torch.nn as nn
+# noinspection PyProtectedMember
+from lightning_fabric.utilities.types import _MAP_LOCATION_TYPE, _PATH
 from omegaconf import DictConfig
+from typing_extensions import Self
 
 from src.algorithms.algorithm_base import AlgorithmBase
 from src.utils import CompileParams, dice_loss
@@ -41,13 +46,26 @@ class RomeTransformerUnet(AlgorithmBase):
         self.allowable_errors = allowable_errors
     
     def pred(self, batch):
-        input_image, sequence, *rest = batch
+        input_image, sequence, supervision_image, image_size, ue_loc_y_x, map_center, ue_initial_lat_lon = batch
         # noinspection PyTypeChecker
         pred_image = self.network_field(
             torch.Tensor([input_image]).cuda(self.gpu),
             torch.Tensor([sequence]).cuda(self.gpu)
         )
-        return pred_image
+        out = nn.functional.sigmoid(pred_image).detach().cpu().numpy()[0, 0]
+        lat, lon = map_center[0], map_center[1]
+        original_img_size = image_size
+        original_lat, original_lon = ue_initial_lat_lon[0], ue_initial_lat_lon[1]
+        
+        return dict(
+            out=out,
+            center_lat=lat,
+            center_lon=lon,
+            original_img_size=original_img_size,
+            original_ue_lat=original_lat,
+            original_ue_lon=original_lon,
+            ue_loc_y_x=ue_loc_y_x
+        )
     
     def step(self, batch, *args, **kwargs):
         input_image, sequence, sequence_lengths, supervision_image, image_size, ue_loc_y_x = batch
@@ -87,3 +105,30 @@ class RomeTransformerUnet(AlgorithmBase):
         }
         
         return metrics
+    
+    @classmethod
+    def load_from_checkpoint(
+        cls,
+        checkpoint_path: Union[_PATH, IO],
+        map_location: _MAP_LOCATION_TYPE = None,
+        hparams_file: Optional[_PATH] = None,
+        strict: Optional[bool] = None,
+        **kwargs: Any,
+    ) -> Self:
+        checkpoint = torch.load(checkpoint_path, map_location=map_location)
+        state_dict = {k.replace("_network", "network_field"): v for k, v in checkpoint["state_dict"].items()}
+        
+        if state_dict.keys() != checkpoint["state_dict"].keys():
+            checkpoint["state_dict"] = state_dict
+        
+        buffer = io.BytesIO()
+        torch.save(checkpoint, buffer)
+        buffer.seek(0)
+        
+        return super().load_from_checkpoint(
+            buffer,
+            map_location=map_location,
+            hparams_file=hparams_file,
+            strict=strict,
+            **kwargs
+        )

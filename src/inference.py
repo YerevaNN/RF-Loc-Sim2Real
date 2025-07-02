@@ -40,7 +40,7 @@ def pred(config: DictConfig) -> None:
     
     # In case of Rome we have directories in checkpoint path: hard, medium, easy
     if os.path.basename(os.path.dirname(pred_path)) != "outputs":
-        pred_path = os.path.dirname(pred_path)
+        pred_path = os.path.dirname(pred_path) + "_o"
     pred_path = os.path.join(config["prediction_dir"], os.path.basename(pred_path))
     os.makedirs(pred_path, exist_ok=True)
     
@@ -62,26 +62,9 @@ def pred(config: DictConfig) -> None:
                 os.makedirs(curr_pred_path, exist_ok=True)
                 for i in tqdm(range(len(data_set)), total=len(data_set)):
                     batch = data_set[i]
-                    if len(batch) > 5:
-                        input_image, sequence, supervision_image, image_size, ue_loc_y_x, map_center, ue_initial_lat_lon = batch
-                    out = nn.functional.sigmoid(algorithm.pred(batch)).detach().cpu().numpy()[0, 0]
-                    # noinspection PyUnboundLocalVariable
-                    lat, lon = map_center[0], map_center[1]
-                    # noinspection PyUnboundLocalVariable
-                    original_img_size = image_size
-                    # noinspection PyUnboundLocalVariable
-                    original_lat, original_lon = ue_initial_lat_lon[0], ue_initial_lat_lon[1]
-                    
+                    out = algorithm.pred(batch)
                     # noinspection PyTypeChecker
-                    np.savez(
-                        os.path.join(curr_pred_path, f"{i}.npz"),
-                        out=out,
-                        center_lat=lat,
-                        center_lon=lon,
-                        original_img_size=original_img_size,
-                        original_ue_lat=original_lat,
-                        original_ue_lon=original_lon
-                    )
+                    np.savez(os.path.join(curr_pred_path, f"{i}.npz"), **out)
         else:
             for i in tqdm(range(len(dataset)), total=len(dataset)):
                 batch = dataset[i]

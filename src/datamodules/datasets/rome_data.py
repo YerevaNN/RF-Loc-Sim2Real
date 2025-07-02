@@ -156,7 +156,9 @@ class RomeDataset(Dataset):
         return result
     
     def __len__(self):
-        return int(self.crop_per_epoch * self.num_ues)
+        if self.split == "train":
+            return int(self.crop_per_epoch * self.num_ues)
+        return len(self.json_map_paths)
     
     def get_json_map_paths(self) -> list[tuple[str, str, int]]:
         json_map_paths = []
