@@ -1,21 +1,14 @@
 import os
 
 import numpy as np
-from tqdm import tqdm
-
-from src.datamodules.datasets import RomeDataset, WAIRDDatasetPathLoss
 
 
 class RomeEvaluation:
     
-    def __init__(self, prediction_path, dataset):
-        assert isinstance(dataset, (RomeDataset, WAIRDDatasetPathLoss)), \
-        "RomeEvaluation works only with RomeDataset or WAIRDDatasetPathLoss"
-
+    def __init__(self, prediction_path):
         self.prediction_path = prediction_path
-        self.dataset = dataset
         self.calculated_rmses = None
-        
+    
     @property
     def rmses(self):
         if self.calculated_rmses is None:
@@ -24,22 +17,17 @@ class RomeEvaluation:
     
     def get_rmses(self) -> np.ndarray:
         rmses = []
-        indices = range(len(self.dataset))
-        for i in tqdm(indices):
-            batch = self.dataset[i]
-            pred_path = os.path.join(self.prediction_path, f"{i}.npz")
+        for i in sorted(os.listdir(self.prediction_path)):
+            pred_path = os.path.join(self.prediction_path, i)
             if not os.path.exists(pred_path):
                 break
             
-            out = list(np.load(pred_path, allow_pickle=True).values())[0]
+            out = np.load(pred_path, allow_pickle=True)
+            image_size = out["original_img_size"]
+            ue_loc_y_x = out["ue_loc_y_x"]
+            out = out["out"]
             
-            if len(batch) > 5:
-                input_image, sequence, supervision_image, image_size, ue_loc_y_x, map_center, ue_initial_lat_lon = batch
-                scale = image_size / out.shape[0]
-            else:
-                map_resized, base_stations_data, ue_loc_img, orig_image_size, ue_loc_y_x = batch
-                scale = orig_image_size / out.shape[0]
-            
+            scale = image_size / out.shape[0]
             max_ind = out.flatten().argmax()
             ue_location_pred = np.array([max_ind // max(out.shape), max_ind % max(out.shape)])
             rmse = float(((ue_location_pred - ue_loc_y_x) ** 2).sum() ** 0.5) * scale

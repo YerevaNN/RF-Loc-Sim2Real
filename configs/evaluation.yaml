@@ -5,12 +5,11 @@ print_config: True
 ignore_warnings: True
 
 
-prediction_path: ${oc.env:PREDICTIONS_PATH}/test/2024-10-21_15-14-42.862679  # only needed for prediction mode
+prediction_path: ${oc.env:PREDICTIONS_PATH}/test/2025-02-06_09-31-33.881257_o/  # only needed for prediction mode
 split: test
+is_rome: True
 
-defaults:
-  - datamodule: rome_data
-  - _self_
+error_tolerance: [ 1, 5, 10, 20, 30, 40, 50 ]
 
 hydra:
   run:

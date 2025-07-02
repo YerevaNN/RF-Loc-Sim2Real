@@ -40,7 +40,7 @@ def pred(config: DictConfig) -> None:
     
     # In case of Rome we have directories in checkpoint path: hard, medium, easy
     if os.path.basename(os.path.dirname(pred_path)) != "outputs":
-        pred_path = os.path.dirname(pred_path) + "_o"
+        pred_path = os.path.dirname(pred_path)
     pred_path = os.path.join(config["prediction_dir"], os.path.basename(pred_path))
     os.makedirs(pred_path, exist_ok=True)
     
