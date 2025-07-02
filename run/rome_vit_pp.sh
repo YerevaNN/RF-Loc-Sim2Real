@@ -1,7 +1,7 @@
 #!/bin/sh
 
 HYDRA_FULL_ERROR=1 \
-python ../../run.py \
+python ../run.py \
 trainer.max_epochs=9999 \
 trainer.devices=[1] \
 datamodule.batch_size=10 \

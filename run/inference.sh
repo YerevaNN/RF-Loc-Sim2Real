@@ -1,7 +1,7 @@
 #!/bin/sh
 
 HYDRA_FULL_ERROR=1 \
-python ../../run.py \
+python ../run.py \
 --config-name=inference \
 split=test \
 datamodule=rome_data \
