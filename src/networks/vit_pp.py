@@ -5,6 +5,7 @@ import torch.nn as nn
 from transformers import CLIPVisionConfig, CLIPVisionModel, Dinov2Config, Dinov2Model
 from transformers.modeling_outputs import BaseModelOutputWithPooling
 
+from src.networks.poe import PositionalEncoding2D
 
 class ViTPlusPlus(nn.Module):
     
@@ -38,7 +39,9 @@ class ViTPlusPlus(nn.Module):
             nn.ReLU(),
             nn.Linear(1024, v_hidden_size),
         )
-    
+
+        self.pe = PositionalEncoding2D(d_model=v_hidden_size)
+        
     def forward(
         self,
         pixel_values: Optional[torch.FloatTensor] = None,
@@ -54,9 +57,15 @@ class ViTPlusPlus(nn.Module):
         if pixel_values is None:
             raise ValueError("You have to specify pixel_values")
         
+        # if sequence is not None:
+        #     sequence_embedding = self.mlp(sequence)
+
         if sequence is not None:
-            sequence_embedding = self.mlp(sequence)
-        
+            coords = sequence[:, :, :2]
+            radio_info = sequence[:, :, 2:]
+            sequence_embedding = self.mlp(radio_info)
+            sequence_embedding = self.pe(coords) + sequence_embedding
+
         if self.model_type == "clip":
             img_embeddings = self.vit.vision_model.embeddings(pixel_values)
             img_embeddings = self.vit.vision_model.pre_layrnorm(img_embeddings)
