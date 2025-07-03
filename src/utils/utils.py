@@ -1,15 +1,14 @@
+import fcntl
 import os
 import struct
+import termios
 from dataclasses import dataclass
 from typing import Any, Sequence
 
-import fcntl
-import numpy as np
 import psutil
 import pytorch_lightning as pl
 import rich.syntax
 import rich.tree
-import termios
 import torch
 from omegaconf import DictConfig, OmegaConf
 from pytorch_lightning.callbacks.progress.rich_progress import RichProgressBarTheme
@@ -105,29 +104,6 @@ def log_hyperparameters(
     trainer.logger.log_hyperparams = empty
 
 
-def pad_to_square(img, fill_value=-1, size=None):
-    if size is not None and max(img.shape) <= size:
-        pic_size = size
-        pic = np.full(shape=(pic_size, pic_size, *img.shape[2:]), fill_value=fill_value, dtype=img.dtype)
-        left = (size - img.shape[0]) // 2
-        top = (size - img.shape[1]) // 2
-        pic[left:left + img.shape[0], top:top + img.shape[1]] = img
-        return pic
-    else:
-        pic_size = max(img.shape)
-        if pic_size > img.shape[0]:
-            pad_size = (pic_size - img.shape[0]) // 2
-            pad = np.full(shape=(pad_size, pic_size, *img.shape[2:]), fill_value=fill_value, dtype=img.dtype)
-            img = np.concatenate((pad, img, pad), axis=0)
-        
-        elif pic_size > img.shape[1]:
-            pad_size = (pic_size - img.shape[1]) // 2
-            pad = np.full(shape=(pic_size, pad_size, *img.shape[2:]), fill_value=fill_value, dtype=img.dtype)
-            img = np.concatenate((pad, img, pad), axis=1)
-    
-    return img
-
-
 class EpochCounter:
     count = 0
 
@@ -195,25 +171,3 @@ def worker_initializer(cpu_list, index_counter):
     # Assign CPU affinity based on the process index
     cpu_index = cpu_list[index]
     p.cpu_affinity([cpu_index])
-
-
-class BuildingShiftDistribution:
-    """
-    Randomly sampling from a distribution of building shifts with a given ECDF.
-    We interpolate the CDF from ECDF with linear interpolation, resulting constant interpolation in the PDF.
-    """
-    
-    def __init__(self, ecdf: dict[float, float]):
-        self.x_values = np.array(sorted(ecdf.keys()))
-        self.ecdf_values = np.array(sorted(ecdf.values()))
-    
-    def sample(self, size=1):
-        pdf_values = np.diff(self.ecdf_values)
-        # the index segment of the CDF to sample from
-        segment = np.random.choice(list(range(pdf_values.shape[0])), size, p=pdf_values / pdf_values.sum())
-        u = np.random.random(size)
-        # left and right endpoints of a segment
-        left = self.x_values[segment]
-        right = self.x_values[segment + 1]
-        # constant interpolation
-        return u * (right - left) + left
