@@ -94,8 +94,8 @@ class ViTPlusPlusUPerNet(nn.Module):
         
         # UperNet
         if self.use_upernet:
-            self.PPN = PSPModule(feature_channels[-1] + 1 * self.contest, bin_sizes=up_pool_scales)
-            self.FPN = FPN_fuse([fc + 1 * self.contest for fc in feature_channels])
+            self.PPN = PSPModule(feature_channels[-1], bin_sizes=up_pool_scales)
+            self.FPN = FPN_fuse(feature_channels)
         
         if feature_channels[0] // (v_patch_size ** 2) == feature_channels[0] / (v_patch_size ** 2):
             head_out = feature_channels[0] // (v_patch_size ** 2)
@@ -109,7 +109,7 @@ class ViTPlusPlusUPerNet(nn.Module):
             padding="same"
         )
         self.head = nn.Conv2d(
-            feature_channels[0] + 1 * self.contest if self.neck else head_out,
+            feature_channels[0] if self.neck else head_out,
             num_classes, kernel_size=3, padding="same"
         )
     
@@ -148,11 +148,6 @@ class ViTPlusPlusUPerNet(nn.Module):
             if self.neck:
                 output = list(self.neck(output))
             # Up path
-            if self.contest:
-                output = [
-                    torch.cat([o, torch.nn.functional.interpolate(image[:, 4:5], o.shape[2:])], dim=1)
-                    for o in output
-                ]
             output[-1] = self.PPN(output[-1])
             output = self.FPN(output)
         else:
