@@ -4,14 +4,12 @@ num_classes: 1
 image_size: 224
 
 mlp_input_dim: 6
-min_mlp_tokens: 3
 
 v_num_channels: 3
 v_patch_size: 14
 v_hidden_size: 768
 v_num_hidden_layers: 12
 v_num_attention_heads: 12
-mixer_out: null
 res_hidden_states: null  # [ 1, 5, 9, 13 ]
 use_upernet: False
 up_pool_scales: [ 1, 2, 4, 7 ]

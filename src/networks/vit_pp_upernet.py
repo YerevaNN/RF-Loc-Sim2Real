@@ -17,13 +17,11 @@ class ViTPlusPlusUPerNet(nn.Module):
         num_classes: int,
         image_size: int,
         mlp_input_dim: int,
-        min_mlp_tokens: int,
         v_num_channels: int,
         v_patch_size: int,
         v_hidden_size: int,
         v_num_hidden_layers: int,
         v_num_attention_heads: int,
-        mixer_out: int,
         res_hidden_states: list[int],
         use_upernet: bool,
         up_pool_scales: list[int],
@@ -35,11 +33,6 @@ class ViTPlusPlusUPerNet(nn.Module):
         pretrained: str
     ):
         super().__init__()
-        
-        assert (
-            mixer_out is None or int(mixer_out ** 0.5) ** 2 == mixer_out,
-            "Mixer's output size should be a square of a whole number"
-        )
         
         self.v_hidden_size = v_hidden_size
         self.v_patch_size = v_patch_size
@@ -58,12 +51,7 @@ class ViTPlusPlusUPerNet(nn.Module):
             feature_channels = [feature_channels[i] for i in res_hidden_states]
         
         self.num_tokes = (image_size // v_patch_size) ** 2
-        self.mixer_out = mixer_out or self.num_tokes
-        self.mixers = nn.ModuleList(
-            [
-                nn.Conv1d(self.num_tokes + min_mlp_tokens + 1, self.mixer_out, 1) for _ in range(len(feature_channels))
-            ]
-        )
+        
         if not self.use_upernet:
             self.bns = nn.ModuleList([nn.BatchNorm2d(c) for c in feature_channels])
         
@@ -127,19 +115,18 @@ class ViTPlusPlusUPerNet(nn.Module):
         )
         vit_hidden_states = vit_out.hidden_states
         
-        h = w = int(self.mixer_out ** 0.5)
+        h = w = int(self.num_tokes ** 0.5)
         
         j = 0
         output = []
         for i, v in enumerate(vit_hidden_states + (vit_out.last_hidden_state,)):
             if self.res_hidden_states and i not in self.res_hidden_states:
                 continue
-            m = self.mixers[j]
             bn = self.bns[j] if not self.use_upernet else lambda x: x
             pn = self.pre_necks[j] if self.neck else lambda x: x
             j += 1
             depth = self.neck_input_dim or self.v_hidden_size
-            o = m(v[:, :m.in_channels])
+            o = v[:, 1:self.num_tokes + 1]
             o = pn(o).reshape(-1, h, w, depth).permute(0, 3, 1, 2)
             o = bn(o)
             output.append(o)
