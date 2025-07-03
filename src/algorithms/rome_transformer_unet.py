@@ -22,7 +22,7 @@ class RomeTransformerUnet(AlgorithmBase):
         compiled: CompileParams,
         use_ce: bool,
         use_dice: bool,
-        allowable_errors: list,
+        error_tolerance: list,
         optimizer_conf: DictConfig = None,
         scheduler_conf: DictConfig = None,
         network: nn.Module = None,
@@ -43,7 +43,7 @@ class RomeTransformerUnet(AlgorithmBase):
         self.use_ce = use_ce
         self.use_dice = use_dice
         self.mse = nn.MSELoss(reduction='none')
-        self.allowable_errors = allowable_errors
+        self.error_tolerance = error_tolerance
     
     def pred(self, batch):
         input_image, sequence, supervision_image, image_size, ue_loc_y_x, map_center, ue_initial_lat_lon = batch
@@ -87,7 +87,7 @@ class RomeTransformerUnet(AlgorithmBase):
         ).sum(dim=1).sqrt() * image_size / max(pred_image[0][0].shape)
         
         # noinspection PyUnresolvedReferences
-        accuracies = {f"acc_{p}": (mses_meters < p).sum() / len(mses_meters) for p in self.allowable_errors}
+        accuracies = {f"acc_{p}": (mses_meters < p).sum() / len(mses_meters) for p in self.error_tolerance}
         mse_meters = mses_meters.mean()
         
         pred_image_sigmoid = torch.sigmoid(pred_image)
