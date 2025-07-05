@@ -6,6 +6,7 @@ ignore_warnings: False
 
 mat_file: ${oc.env:OSLO_MAT_FILE}
 cell_file: ${oc.env:OSLO_CELL_FILE}
+sionna_csv: null
 out_dir: ${oc.env:OSLO_OUT_DIR}
 mat_keyword: dataSet
 random_point_scale_factor: 0.9

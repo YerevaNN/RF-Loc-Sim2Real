@@ -34,20 +34,54 @@ warnings.filterwarnings("ignore", message="Conversion of an array with ndim > 0 
 class DataGen:
     
     def __init__(
-        self, oslo: bool, mat_file: str, cell_file: str, out_dir: str,
-        random_point_scale_factor: float, nsew: list[float], workers: list[int]
+        self,
+        oslo: bool,
+        mat_file: str,
+        cell_file: str,
+        sionna_csv: str,
+        out_dir: str,
+        random_point_scale_factor: float,
+        nsew: list[float],
+        workers: list[int]
     ):
         self.random_point_scale_factor = random_point_scale_factor
-        mat = loadmat(mat_file)
         self.oslo = oslo
+        if sionna_csv:
+            log.info(f"Reading {sionna_csv}. {mat_file} and {cell_file} are ignored.")
+            self.simulated = True
+            
+            self.info_df = pd.read_csv(sionna_csv)
+            self.info_df.rename(
+                columns={
+                    "ue_lat": "latitude",
+                    "ue_lon": "longitude",
+                    "bs_lat": "cellLatitude",
+                    "bs_lon": "cellLongitude",
+                    "sim_rssi": "RSSI",
+                    "sim_nsinr": "NSINR",
+                    "sim_nrsrp": "NRSRP",
+                    "sim_nrsrq": "NRSRQ",
+                },
+                inplace=True
+            )
+            self.info_df["eNodeB ID"] = -1
+            self.info_df["eNodeBID"] = -1
+            self.info_df["MNC"] = -1
+            self.info_df["NPCI"] = -1
+            self.info_df["interpolated"] = False
+            self.info_df["ToA"] = -1
+            self.info_df["campaignID"] = 0
+        else:
+            self.simulated = False
+            mat = loadmat(mat_file)
+            cell_df = pd.read_excel(cell_file)[[
+                "Name", "eNodeID" if oslo else "eNodeBID", "Latitude", "Longitude", "PosErrorDirection",
+                "PosErrorLambda1", "PosErrorLambda2", "MNC", "TowerID"
+            ]]
+            
+            self.info_df = self.merge_cell_data(mat, cell_df)
+            self.info_df = self.info_df[~self.info_df.isnull().any(axis=1)]
         
-        cell_df = pd.read_excel(cell_file)[[
-            "Name", "eNodeID" if oslo else "eNodeBID", "Latitude", "Longitude", "PosErrorDirection",
-            "PosErrorLambda1", "PosErrorLambda2", "MNC", "TowerID"
-        ]]
-        
-        self.info_df = self.merge_cell_data(mat, cell_df)
-        self.info_df = self.info_df[~self.info_df.isnull().any(axis=1)]
         self.ue_positions = np.unique(self.info_df[["latitude", "longitude"]].values, axis=0)
         self.out_dir = out_dir
         north, south, east, west = nsew
@@ -294,11 +328,16 @@ class DataGen:
         
         campaign_id = int(corresponding_cells["campaignID"].values[0])
         
-        id_columns = [
-            "NPCI", "eNodeID" if self.oslo else "eNodeBID", "MNC", "cellLatitude", "cellLongitude", "interpolated"
-        ]
+        if self.simulated:
+            id_columns = ["bs_idx"]
+            other_columns = ["NPCI", "eNodeBID", "MNC", "cellLatitude", "cellLongitude", "interpolated"]
+        else:
+            id_columns = [
+                "NPCI", "eNodeID" if self.oslo else "eNodeBID", "MNC", "cellLatitude", "cellLongitude", "interpolated"
+            ]
+            other_columns = []
         measurement_columns = ["RSSI", "NSINR", "NRSRP", "NRSRQ", "ToA"]
-        unique_cells = corresponding_cells[id_columns + measurement_columns].drop_duplicates(id_columns)
+        unique_cells = corresponding_cells[id_columns + measurement_columns + other_columns].drop_duplicates(id_columns)
         
         custom_crs = DataGen.create_custom_tm_crs(center_lat, center_lon)
         try:
@@ -349,9 +388,13 @@ def generate_data(config: DictConfig) -> None:
     
     data = DataGen(
         oslo=config["name"].startswith("oslo"),
-        mat_file=config["mat_file"], cell_file=config["cell_file"], out_dir=config["out_dir"],
+        mat_file=config["mat_file"],
+        cell_file=config["cell_file"],
+        sionna_csv=config["sionna_csv"],
+        out_dir=config["out_dir"],
         random_point_scale_factor=config["random_point_scale_factor"],
-        nsew=config["nsew"], workers=workers
+        nsew=config["nsew"],
+        workers=workers
     )
     log.info("Saving cell_info CSV")
     data.save_cell_info()

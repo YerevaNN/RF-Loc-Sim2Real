@@ -6,6 +6,7 @@ ignore_warnings: False
 
 mat_file: ${oc.env:ROME_MAT_FILE}
 cell_file: ${oc.env:ROME_CELL_FILE}
+sionna_csv: ${oc.env:ROME_SIONNA_CSV}
 out_dir: ${oc.env:ROME_OUT_DIR}
 random_point_scale_factor: 0.9
 nsew: [ 41.89, 41.81, 12.50, 12.43 ]
