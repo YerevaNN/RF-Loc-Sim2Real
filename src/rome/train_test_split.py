@@ -16,7 +16,7 @@ class DataSplit:
         self,
         json_path: str,
         train_only: bool,
-        hard_test_campaign: str,
+        hard_test_nsew: str,
         hard_train: float,
         hard_test: float,
         medium_train: float,
@@ -38,7 +38,7 @@ class DataSplit:
             self.info_json: dict[str, dict[str, dict[str, int]]] = json.load(file)
         
         self.train_only = train_only
-        self.hard_test_campaign = str(hard_test_campaign)
+        self.hard_test_nsew = hard_test_nsew
         self.hard_train = hard_train
         self.hard_test = hard_test
         self.medium_train = medium_train
@@ -70,15 +70,16 @@ class DataSplit:
         
         return train_split, test_split
     
-    def split_hard_test(self) -> tuple[dict, dict]:
-        campaign_info = self.info_json[self.hard_test_campaign]
-        train_info = deepcopy(self.info_json)
-        train_info.pop(self.hard_test_campaign)
-        hard_test_info = {self.hard_test_campaign: campaign_info}
-        
-        return train_info, hard_test_info
+    # def split_hard_test(self) -> tuple[dict, dict]:
+    #     campaign_info = self.info_json[self.hard_test_nsew]
+    #     train_info = deepcopy(self.info_json)
+    #     train_info.pop(self.hard_test_nsew)
+    #     hard_test_info = {self.hard_test_nsew: campaign_info}
+    #
+    #     return train_info, hard_test_info
     
-    def split_hard_val(self, train_info: dict) -> tuple[dict, dict]:
+    @staticmethod
+    def split_hard(train_info: dict, nsew) -> tuple[dict, dict]:
         hard_val_info = {}
         for cid in list(train_info.keys()):
             for pid in list(train_info[cid].keys()):
@@ -93,7 +94,7 @@ class DataSplit:
                 except ValueError:
                     log.info(f"Invalid lat/lon format in pid: {pid}. Skipping.")
                     continue
-                north, south, east, west = self.hard_val_nsew
+                north, south, east, west = nsew
                 
                 if south <= lat <= north and west <= lon <= east:
                     
@@ -150,8 +151,8 @@ class DataSplit:
             train_info = self.info_json
             hard_test_info, hard_val_info, medium_test_info, medium_val_info, easy_test_info, easy_val_info = ({},) * 6
         else:
-            train_info, hard_test_info = self.split_hard_test()
-            train_info, hard_val_info = self.split_hard_val(train_info)
+            train_info, hard_test_info = self.split_hard(self.info_json, self.hard_test_nsew)
+            train_info, hard_val_info = self.split_hard(train_info, self.hard_val_nsew)
             train_info, medium_test_info, medium_val_info = self.split_medium_test(train_info)
             train_info, easy_test_info, easy_val_info = self.split_easy_test(train_info)
         
@@ -176,7 +177,7 @@ class DataSplit:
         with open(os.path.join(out_dir, "easy_val.json"), "w") as file:
             json.dump(easy_val_info, file, indent=4)
         
-        log.info(f"Hard Test Campaign ({self.hard_test_campaign}) has {sum(map(len, hard_test_info.values()))} points.")
+        log.info(f"Hard Test Campaign ({self.hard_test_nsew}) has {sum(map(len, hard_test_info.values()))} points.")
         log.info(f"Medium Test has {sum(map(len, medium_test_info.values()))} points.")
         log.info(f"Hard Val has {sum(map(len, hard_val_info.values()))} points.")
         log.info(f"Medium Val has {sum(map(len, medium_val_info.values()))} points.")
@@ -187,7 +188,7 @@ def train_test_val(config: DictConfig) -> None:
     train_test_splitter = DataSplit(
         json_path=os.path.join(config["out_dir"], f"info_{config.get('dataset_type', 'dataSet')}.json"),
         train_only=config["train_only"],
-        hard_test_campaign=config["hard_test_campaign"],
+        hard_test_nsew=config["hard_test_nsew"],
         hard_train=config["hard_train"],
         hard_test=config["hard_test"],
         medium_train=config["medium_train"],

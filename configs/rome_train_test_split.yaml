@@ -8,7 +8,7 @@ out_dir: ${oc.env:ROME_OUT_DIR}
 
 train_only: False
 dataset_type: dataSet
-hard_test_campaign: "5"
+hard_test_nsew: [ 41.83, 41.82, 12.48, 12.46 ]
 hard_train: 0
 hard_test: 1.0
 hard_val_nsew: [ 41.85, 41.84, 12.49, 12.45 ]
