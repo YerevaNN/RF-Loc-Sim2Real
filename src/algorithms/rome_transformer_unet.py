@@ -77,13 +77,12 @@ class RomeTransformerUnet(AlgorithmBase):
         ue_loc_y_x: torch.Tensor
     ):
         max_ind_pred = pred_image.flatten(1).argmax(dim=-1)
-        ue_location_pred = torch.stack(
-            [max_ind_pred % max(pred_image[0][0].shape), max_ind_pred // max(pred_image[0][0].shape)], dim=1
+        ue_location_pred_y_x = torch.stack(
+            [max_ind_pred // max(pred_image[0][0].shape), max_ind_pred % max(pred_image[0][0].shape)], dim=1
         )  # .cuda()
-        max_ind = supervision_image.flatten(1).argmax(dim=-1)
         
         mses_meters = self.mse(
-            ue_location_pred.to(torch.float32), ue_loc_y_x.to(torch.float32)
+            ue_location_pred_y_x.to(torch.float32), ue_loc_y_x.to(torch.float32)
         ).sum(dim=1).sqrt() * image_size / max(pred_image[0][0].shape)
         
         # noinspection PyUnresolvedReferences
