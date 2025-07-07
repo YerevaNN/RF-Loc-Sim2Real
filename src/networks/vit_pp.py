@@ -57,14 +57,14 @@ class ViTPlusPlus(nn.Module):
         if pixel_values is None:
             raise ValueError("You have to specify pixel_values")
         
-        # if sequence is not None:
-        #     sequence_embedding = self.mlp(sequence)
-
         if sequence is not None:
-            coords = sequence[:, :, :2]
-            radio_info = sequence[:, :, 2:]
-            sequence_embedding = self.mlp(radio_info)
-            sequence_embedding = self.pe(coords) + sequence_embedding
+            sequence_embedding = self.mlp(sequence)
+
+        # if sequence is not None:
+        #     coords = sequence[:, :, :2]
+        #     radio_info = sequence[:, :, 2:]
+        #     sequence_embedding = self.mlp(radio_info)
+        #     sequence_embedding = self.pe(coords) + sequence_embedding
 
         if self.model_type == "clip":
             img_embeddings = self.vit.vision_model.embeddings(pixel_values)
