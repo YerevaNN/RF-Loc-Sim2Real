@@ -60,13 +60,18 @@ class DataSplit:
             test_split = deepcopy(data)
             train_split = {}
         else:
-            train_keys, test_keys = train_test_split(
-                keys, test_size=test_size, random_state=self.random_state
-            )
-            # train_keys = [str(k) for k in train_keys]
-            # test_keys = [str(k) for k in test_keys]
-            train_split = {key: data[key] for key in train_keys}
-            test_split = {key: data[key] for key in test_keys}
+            if len(keys) > 1:
+                train_keys, test_keys = train_test_split(
+                    keys, test_size=test_size, random_state=self.random_state
+                )
+                # train_keys = [str(k) for k in train_keys]
+                # test_keys = [str(k) for k in test_keys]
+                train_split = {key: data[key] for key in train_keys}
+                test_split = {key: data[key] for key in test_keys}
+            else:
+                # If there's only one key, we can't split it, so we return it as train and leave test empty
+                train_split = data
+                test_split = {}
         
         return train_split, test_split
     
