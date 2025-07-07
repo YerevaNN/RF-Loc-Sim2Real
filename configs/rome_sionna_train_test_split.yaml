@@ -1,0 +1,24 @@
+# @package _global_
+name: rome_train_test_split
+seed: 0
+print_config: True
+ignore_warnings: True
+
+out_dir: ${oc.env:ROME_SIONNA_OUT_DIR_C}
+
+train_only: False
+dataset_type: dataSet
+hard_test_nsew: [ 41.865, 41.85, 12.495, 12.48 ]
+hard_train: 0
+hard_test: 1.0
+hard_val_nsew: [ 41.865, 41.85, 12.52, 12.495 ]
+medium_train: 0.9
+medium_test: 0.5
+easy_train: 0.9
+easy_test: 0.5
+
+hydra:
+  run:
+    dir: ${oc.env:OUTPUT_DIR}/${now:%Y-%m-%d_%H-%M-%S}
+  job:
+    chdir: True
