@@ -1,7 +1,6 @@
 import json
 import os
 from collections import defaultdict
-from glob import glob
 
 from omegaconf import DictConfig
 from tqdm import tqdm
@@ -47,15 +46,17 @@ class InfoJSONCreator:
     
     def gen_json(self):
         """Generate the final info JSON file"""
-        all_json_files = sorted(glob(os.path.join(self.main_path, "**/*.json"), recursive=True))
         
-        for json_path in tqdm(all_json_files):
-            if os.path.basename(json_path) == "info.json":
-                continue
-            try:
-                self.gen_point(json_path)
-            except Exception as ex:
-                print(f"Error in {json_path}: {ex}")
+        for root, dirs, files in tqdm(os.walk(self.main_path), desc="Scanning directories"):
+            for file in files:
+                if file.endswith(".json"):
+                    if os.path.basename(file).startswith("info"):
+                        continue
+                    json_path = os.path.join(root, file)
+                    try:
+                        self.gen_point(json_path)
+                    except Exception as ex:
+                        print(f"Error in {json_path}: {ex}")
         
         with open(os.path.join(self.main_path, f"info_{self.dataset_type}.json"), "w") as file:
             # noinspection PyTypeChecker
