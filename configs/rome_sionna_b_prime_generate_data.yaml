@@ -4,12 +4,12 @@ seed: 0
 print_config: True
 ignore_warnings: False
 
-mat_file: ${oc.env:ROME_MAT_FILE}
-cell_file: ${oc.env:ROME_CELL_FILE}
-sionna_csv: null
-out_dir: ${oc.env:ROME_OUT_DIR}
+mat_file: null
+cell_file: null
+sionna_csv: ${oc.env:ROME_SIONNA_B_PRIME_CSV}
+out_dir: ${oc.env:ROME_SIONNA_OUT_DIR_B_PRIME}
 random_point_scale_factor: 0.9
-nsew: [ 41.89, 41.81, 12.50, 12.43 ]
+nsew: [ 41.90, 41.80, 12.56, 12.45 ]
 num_workers: 8
 
 num_points: 1500000
