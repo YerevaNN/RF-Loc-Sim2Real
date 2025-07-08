@@ -1,0 +1,13 @@
+# @package _global_
+name: rome_visualize
+seed: 0
+print_config: True
+ignore_warnings: True
+
+splits_path: ${oc.env:ROME_SIONNA_SPLITS_PATH_B_PRIME}
+
+hydra:
+  run:
+    dir: ${oc.env:OUTPUT_DIR}/${now:%Y-%m-%d_%H-%M-%S}
+  job:
+    chdir: True
