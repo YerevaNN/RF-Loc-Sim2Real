@@ -1,5 +1,6 @@
 import json
 import logging
+import math
 import os
 from collections import defaultdict
 from copy import deepcopy
@@ -23,7 +24,8 @@ class DataSplit:
         medium_test: float,
         easy_train: float,
         easy_test: float,
-        hard_val_nsew: list = None,
+        hard_val_nsew: list,
+        hard_margin_meters: float,
         random_state: int = 42,
     ):
         with open(json_path, "r") as file:
@@ -38,7 +40,6 @@ class DataSplit:
             self.info_json: dict[str, dict[str, dict[str, int]]] = json.load(file)
         
         self.train_only = train_only
-        self.hard_test_nsew = hard_test_nsew
         self.hard_train = hard_train
         self.hard_test = hard_test
         self.medium_train = medium_train
@@ -46,7 +47,10 @@ class DataSplit:
         self.easy_train = easy_train
         self.easy_test = easy_test
         
+        self.hard_test_nsew = hard_test_nsew
         self.hard_val_nsew = hard_val_nsew
+        self.hard_margin_meters = hard_margin_meters
+        
         self.random_state = random_state
     
     def split_dict(self, data: dict, test_size: float = 0.3):
@@ -75,6 +79,37 @@ class DataSplit:
         
         return train_split, test_split
     
+    def apply_margin_to_nsew(self, nsew):
+        """
+        Apply margin to nsew coordinates by moving boundaries inward by margin_meters.
+        
+        Args:
+            nsew: [north, south, east, west] coordinates in degrees
+        
+        Returns:
+            [north, south, east, west] with margins applied
+        """
+        north, south, east, west = nsew
+        
+        # Convert meters to degrees (approximate)
+        # 1 degree of latitude ≈ 111,000 meters
+        # 1 degree of longitude ≈ 111,000 * cos(latitude) meters
+        lat_center = (north + south) / 2
+        meters_per_degree_lat = 111000
+        meters_per_degree_lon = 111000 * math.cos(math.radians(lat_center))
+        
+        # Convert margin from meters to degrees
+        margin_degrees_lat = self.hard_margin_meters / meters_per_degree_lat
+        margin_degrees_lon = self.hard_margin_meters / meters_per_degree_lon
+        
+        # Apply margin inward
+        north_margined = north - margin_degrees_lat
+        south_margined = south + margin_degrees_lat
+        east_margined = east - margin_degrees_lon
+        west_margined = west + margin_degrees_lon
+        
+        return [north_margined, south_margined, east_margined, west_margined]
+    
     # def split_hard_test(self) -> tuple[dict, dict]:
     #     campaign_info = self.info_json[self.hard_test_nsew]
     #     train_info = deepcopy(self.info_json)
@@ -83,9 +118,14 @@ class DataSplit:
     #
     #     return train_info, hard_test_info
     
-    @staticmethod
-    def split_hard(train_info: dict, nsew) -> tuple[dict, dict]:
+    def split_hard(self, train_info: dict, nsew) -> tuple[dict, dict]:
         hard_val_info = {}
+        
+        # Apply margin to nsew coordinates
+        nsew_with_margin = nsew  # self.apply_margin_to_nsew(nsew)
+        north, south, east, west = nsew
+        north_m, south_m, east_m, west_m = nsew_with_margin
+        
         for cid in list(train_info.keys()):
             for pid in list(train_info[cid].keys()):
                 samples = train_info[cid][pid]
@@ -99,14 +139,14 @@ class DataSplit:
                 except ValueError:
                     log.info(f"Invalid lat/lon format in pid: {pid}. Skipping.")
                     continue
-                north, south, east, west = nsew
                 
-                if south <= lat <= north and west <= lon <= east:
+                if south_m <= lat <= north_m and west_m <= lon <= east_m:
                     
                     if cid not in hard_val_info:
                         hard_val_info[cid] = {}
                     hard_val_info[cid][pid] = samples
-                    
+                
+                if south <= lat <= north and west <= lon <= east:
                     del train_info[cid][pid]
                 
                 if cid in train_info and not train_info[cid]:
@@ -201,6 +241,7 @@ def train_test_val(config: DictConfig) -> None:
         easy_train=config["easy_train"],
         easy_test=config["easy_test"],
         hard_val_nsew=config["hard_val_nsew"],
+        hard_margin_meters=config["hard_margin_meters"],
         random_state=config["seed"],
     )
     

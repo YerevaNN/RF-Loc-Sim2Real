@@ -16,6 +16,8 @@ medium_test: 0.5
 easy_train: 0.99
 easy_test: 0.5
 
+hard_margin_meters: 601
+
 hydra:
   run:
     dir: ${oc.env:OUTPUT_DIR}/${now:%Y-%m-%d_%H-%M-%S}

@@ -4,7 +4,7 @@ seed: 0
 print_config: True
 ignore_warnings: True
 
-out_dir: ${oc.env:ROME_SIONNA_OUT_DIR_C}
+out_dir: ${oc.env:ROME_SIONNA_OUT_DIR_B_PRIME}
 
 train_only: False
 dataset_type: dataSet
