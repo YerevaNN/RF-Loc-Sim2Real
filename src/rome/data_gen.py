@@ -1,10 +1,8 @@
 import json
 import logging
-import multiprocessing as mp
 import os
 import sys
 import warnings
-from multiprocessing import Pool
 from random import choice
 
 import geopandas
@@ -19,8 +17,6 @@ from pyproj import CRS
 from scipy.io import loadmat
 from shapely.geometry import Point
 from tqdm import tqdm
-
-from src.utils import worker_initializer
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.ERROR)
@@ -408,18 +404,7 @@ def generate_data(config: DictConfig) -> None:
         for _ in tqdm(range(config["num_points"]), total=config["num_points"], file=sys.stdout)
     ]
     
-    mp.set_start_method("fork", force=True)
-    index_counter = mp.Value("i", 0)
-    
     log.info("Generating data")
-    with Pool(
-        config["num_workers"],
-        initializer=worker_initializer,
-        initargs=(workers, index_counter)
-    ) as p:
-        list(
-            tqdm(
-                p.imap(data.gen_ran_ue_with_bs, list(zip(range(config["num_points"]), random_sizes))),
-                file=sys.stdout, total=len(random_sizes)
-            )
-        )
+    
+    for i in tqdm(range(config["num_points"]), total=config["num_points"], file=sys.stdout):
+        data.gen_ran_ue_with_bs((i, random_sizes[i]))
