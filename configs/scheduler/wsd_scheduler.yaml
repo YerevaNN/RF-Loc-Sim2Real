@@ -1,7 +1,7 @@
 _target_: src.utils.WarmupStableDecayLR
 
-warmup_epochs: 30
-stable_epochs: 30
+warmup_epochs: 5
+stable_epochs: 5
 max_epochs: ${trainer.max_epochs}
 warmup_start_lr: 0
 stable_lr: 2e-4
