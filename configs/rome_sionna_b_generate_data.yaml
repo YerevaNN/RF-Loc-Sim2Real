@@ -1,0 +1,25 @@
+# @package _global_
+name: rome_generate_data
+seed: 0
+print_config: True
+ignore_warnings: False
+
+mat_file: null
+cell_file: null
+sionna_csv: ${oc.env:ROME_SIONNA_B_CSV}
+out_dir: ${oc.env:ROME_SIONNA_OUT_DIR_B}
+random_point_scale_factor: 0.9
+nsew: [ 41.90, 41.80, 12.56, 12.45 ]
+num_workers: 8
+
+num_points: 1500000
+random_size_mean: 300
+random_size_std: 0
+random_size_min: 100
+random_size_max: 800
+
+hydra:
+  run:
+    dir: ${oc.env:OUTPUT_DIR}/${now:%Y-%m-%d_%H-%M-%S}
+  job:
+    chdir: True

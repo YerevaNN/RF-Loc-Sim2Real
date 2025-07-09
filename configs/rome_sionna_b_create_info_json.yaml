@@ -1,0 +1,14 @@
+# @package _global_
+name: rome_create_info_json
+seed: 0
+print_config: True
+ignore_warnings: True
+
+main_path: ${oc.env:ROME_SIONNA_OUT_DIR_B}
+dataset_type: dataSet
+
+hydra:
+  run:
+    dir: ${oc.env:OUTPUT_DIR}/${now:%Y-%m-%d_%H-%M-%S}
+  job:
+    chdir: True
