@@ -4,21 +4,21 @@ batch_size: 10
 num_workers: 15
 
 dataset_main_paths:
-  - ${oc.env:ROME_SIONNA_OUT_DIR_C}
+  - ${oc.env:ROME_SIONNA_OUT_DIR_B_PRIME}
 train_dataset_json_paths:
-  - ${oc.env:ROME_SIONNA_SPLITS_PATH_C}/train.json
+  - ${oc.env:ROME_SIONNA_SPLITS_PATH_B_PRIME}/train.json
 hard_val_json_paths:
-  - ${oc.env:ROME_SIONNA_SPLITS_PATH_C}/hard_val.json
+  - ${oc.env:ROME_SIONNA_SPLITS_PATH_B_PRIME}/hard_val.json
 hard_test_json_paths:
-  - ${oc.env:ROME_SIONNA_SPLITS_PATH_C}/hard_test.json
+  - ${oc.env:ROME_SIONNA_SPLITS_PATH_B_PRIME}/hard_test.json
 medium_val_json_paths:
-  - ${oc.env:ROME_SIONNA_SPLITS_PATH_C}/medium_val.json
+  - ${oc.env:ROME_SIONNA_SPLITS_PATH_B_PRIME}/medium_val.json
 medium_test_json_paths:
-  - ${oc.env:ROME_SIONNA_SPLITS_PATH_C}/medium_test.json
+  - ${oc.env:ROME_SIONNA_SPLITS_PATH_B_PRIME}/medium_test.json
 easy_val_json_paths:
-  - ${oc.env:ROME_SIONNA_SPLITS_PATH_C}/easy_val.json
+  - ${oc.env:ROME_SIONNA_SPLITS_PATH_B_PRIME}/easy_val.json
 easy_test_json_paths:
-  - ${oc.env:ROME_SIONNA_SPLITS_PATH_C}/easy_test.json
+  - ${oc.env:ROME_SIONNA_SPLITS_PATH_B_PRIME}/easy_test.json
 
 min_num_bs: 3
 max_num_bs: 9999
@@ -51,4 +51,4 @@ decimal_places: 10
 eps_image: 3
 for_viz: False
 map_channels: buildings # buildings, roads, both
-crops_per_epoch: 20
+crops_per_epoch: 0.1
