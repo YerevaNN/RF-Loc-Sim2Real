@@ -12,7 +12,7 @@ class ViTPlusPlus(nn.Module):
     def __init__(
         self, mlp_input_dim: int, image_size: int, v_num_channels: int, v_patch_size: int,
         v_hidden_size: int, v_num_hidden_layers: int, v_num_attention_heads: int, pretrained: str,
-        model_type: Literal["clip", "dino_v2"]
+        model_type: Literal["clip", "dino_v2"], use_pe: bool
     ):
         super().__init__()
         self.model_type = model_type
@@ -41,6 +41,7 @@ class ViTPlusPlus(nn.Module):
         )
 
         self.pe = PositionalEncoding2D(d_model=v_hidden_size)
+        self.use_pe = use_pe
         
     def forward(
         self,
@@ -58,13 +59,13 @@ class ViTPlusPlus(nn.Module):
             raise ValueError("You have to specify pixel_values")
         
         if sequence is not None:
-            sequence_embedding = self.mlp(sequence)
-
-        # if sequence is not None:
-        #     coords = sequence[:, :, :2]
-        #     radio_info = sequence[:, :, 2:]
-        #     sequence_embedding = self.mlp(radio_info)
-        #     sequence_embedding = self.pe(coords) + sequence_embedding
+            if not self.use_pe:
+                sequence_embedding = self.mlp(sequence)
+            else:
+                coords = sequence[:, :, :2]
+                radio_info = sequence[:, :, 2:]
+                sequence_embedding = self.mlp(radio_info)
+                sequence_embedding = self.pe(coords) + sequence_embedding
 
         if self.model_type == "clip":
             img_embeddings = self.vit.vision_model.embeddings(pixel_values)

@@ -21,3 +21,4 @@ pre_out_channels: 3
 pretrained: facebook/dinov2-base
 
 model_type: dino_v2
+use_pe: False
