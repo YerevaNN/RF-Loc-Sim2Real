@@ -194,9 +194,9 @@ class AlgorithmBase(pl.LightningModule):
         else:
             log.info(f"""\n{epoch_metrics}\n""")
     
-    def on_train_epoch_start(self) -> None:
-        current_lr = self.trainer.optimizers[0].param_groups[0]['lr']
-        log.info(f"Epoch {self.trainer.current_epoch + 1}: Learning rate is {current_lr}")
+    # def on_train_epoch_start(self) -> None:
+    #     current_lr = self.trainer.optimizers[0].param_groups[0]['lr']
+    #     log.info(f"Epoch {self.trainer.current_epoch + 1}: Learning rate is {current_lr}")
 
     def on_train_epoch_end(self) -> None:
         outputs = self.training_step_outputs
