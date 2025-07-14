@@ -55,6 +55,7 @@ class AlgorithmBase(pl.LightningModule):
         self.flop_counter = FlopCounterMode(display=False, depth=1)
         self.start = torch.cuda.Event(enable_timing=True)
         self.end = torch.cuda.Event(enable_timing=True)
+        self.current_epoch_lr = 0.0
     
     @property
     def network(self) -> nn.Module:
@@ -73,19 +74,26 @@ class AlgorithmBase(pl.LightningModule):
         ret_opt = {"optimizer": optimizer}
         if self.scheduler_conf is not None:
             scheduler_conf = OmegaConf.create(self.scheduler_conf)
-            # Get monitor if exists, else None
             monitor = scheduler_conf.get("monitor", None)
+            interval = scheduler_conf.get("interval", "epoch")
+
             if "monitor" in scheduler_conf:
                 del scheduler_conf.monitor
-            
+
+            extra_args = {"optimizer": optimizer}
+            if interval == 'step':
+                if not self.trainer.max_epochs or self.trainer.max_epochs == -1:
+                    raise ValueError("max_epochs must be set in trainer for step-based scheduling.")
+                steps_per_epoch = self.trainer.estimated_stepping_batches // self.trainer.max_epochs
+                extra_args['steps_per_epoch'] = steps_per_epoch
+
             scheduler: LRScheduler = hydra.utils.instantiate(
-                scheduler_conf, optimizer=optimizer
+                scheduler_conf, **extra_args
             )
-            sch_opt = {"scheduler": scheduler}
-            
-            # noinspection PyUnboundLocalVariable
+
+            sch_opt = {"scheduler": scheduler, "interval": interval}
+
             if monitor:
-                # noinspection PyUnboundLocalVariable
                 sch_opt["monitor"] = monitor
             
             ret_opt.update({"lr_scheduler": sch_opt})
@@ -146,6 +154,26 @@ class AlgorithmBase(pl.LightningModule):
         
         return output_dict
     
+    def on_train_batch_start(self, batch: Any, batch_idx: int) -> None:
+        lr = self.trainer.optimizers[0].param_groups[0]['lr']
+        self.log("lr", lr, on_step=True, on_epoch=False, prog_bar=True)
+        
+        # If scheduler is WSD and in step-wise decay, update the epoch LR on each batch
+        if not self.trainer.lr_scheduler_configs:
+            return
+        
+        scheduler_config = self.trainer.lr_scheduler_configs[0]
+        scheduler = scheduler_config.scheduler
+        
+        # Need to import WarmupStableDecayLR to use it here
+        from src.utils.schedulers import WarmupStableDecayLR
+        
+        if isinstance(scheduler, WarmupStableDecayLR) and scheduler.interval == 'step':
+            current_step = scheduler.last_epoch
+            decay_start_step = scheduler.max_steps - scheduler.decay_steps
+            if current_step >= decay_start_step:
+                self.current_epoch_lr = lr
+    
     def on_train_batch_end(self, outputs: dict[str, Any], batch: Any, batch_idx: int) -> None:
         outputs = AlgorithmBase.convert_to_numpy(outputs)
         for key, value in outputs.items():
@@ -194,9 +222,9 @@ class AlgorithmBase(pl.LightningModule):
         else:
             log.info(f"""\n{epoch_metrics}\n""")
     
-    # def on_train_epoch_start(self) -> None:
-    #     current_lr = self.trainer.optimizers[0].param_groups[0]['lr']
-    #     log.info(f"Epoch {self.trainer.current_epoch + 1}: Learning rate is {current_lr}")
+    def on_train_epoch_start(self) -> None:
+        self.current_epoch_lr = self.trainer.optimizers[0].param_groups[0]['lr']
+        log.info(f"Epoch {self.trainer.current_epoch}: Learning rate is {self.current_epoch_lr}")
 
     def on_train_epoch_end(self) -> None:
         outputs = self.training_step_outputs
@@ -232,7 +260,7 @@ class AlgorithmBase(pl.LightningModule):
         
         epoch_metrics_shared = {
             "learning_rate": torch.tensor(
-                self.trainer.optimizers[0].param_groups[0]["lr"]
+                self.current_epoch_lr
             )
         }
         
