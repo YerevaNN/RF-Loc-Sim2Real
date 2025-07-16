@@ -20,9 +20,10 @@ from tqdm import tqdm
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.ERROR)
-warnings.filterwarnings("ignore", category=DeprecationWarning)
-warnings.filterwarnings("ignore", category=DeprecationWarning, module="pyproj.transformer")
-warnings.filterwarnings("ignore", message="Conversion of an array with ndim > 0 to a scalar is deprecated")
+# warnings.filterwarnings("ignore", category=DeprecationWarning)
+# warnings.filterwarnings("ignore", category=DeprecationWarning, module="pyproj.transformer")
+# warnings.filterwarnings("ignore", message="Conversion of an array with ndim > 0 to a scalar is deprecated")
+warnings.filterwarnings("ignore")
 
 
 # TODO only crop here. Radio stuff should be done in info json creator
@@ -91,11 +92,13 @@ class DataGen:
         self.roads = ox.graph_to_gdfs(G, nodes=False)
         self.workers = workers
         
-        for campaign_id in self.info_df["campaignID"].unique():
+        total_campaigns = len(self.info_df["campaignID"].unique())
+        for i, campaign_id in enumerate(self.info_df["campaignID"].unique()):
+            log.info(f"Creating folders for campaign {i+1}/{total_campaigns}")
             campaign_id = int(campaign_id)
-            for lat, lon in self.info_df[
+            for lat, lon in tqdm(self.info_df[
                 self.info_df["campaignID"] == campaign_id
-            ][["latitude", "longitude"]].drop_duplicates().values:
+            ][["latitude", "longitude"]].drop_duplicates().values):
                 os.makedirs(
                     os.path.join(self.out_dir, str(campaign_id), DataGen.create_folder_name(lat, lon)),
                     exist_ok=True
