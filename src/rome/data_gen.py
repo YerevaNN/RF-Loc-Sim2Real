@@ -308,10 +308,13 @@ class DataGen:
             json.dump(info_dict, f, indent=4)
         plt.close(fig)
     
-    def gen_ran_ue_with_bs(self, args: tuple[int, int]):
-        i, half_square_size_meters = args
+    def gen_ran_ue_with_bs(self, args: tuple[int, int, bool, int]):
+        i, half_square_size_meters, to_use_sample_per_ue, ue_j = args
         
-        random_ue_lat, random_ue_lon = choice(self.ue_positions)
+        if to_use_sample_per_ue:
+            random_ue_lat, random_ue_lon = self.ue_positions[ue_j]
+        else:
+            random_ue_lat, random_ue_lon = choice(self.ue_positions)
         center_lat, center_lon = DataGen.random_point(
             random_ue_lat, random_ue_lon, half_square_size_meters, self.random_point_scale_factor
         )
@@ -374,13 +377,17 @@ class DataGen:
 
 
 def generate_data(config: DictConfig) -> None:
+    assert config["num_points"] is None or config["sample_per_ue"] is None, "num_points and sample_per_ue should not be set at the same time"
+    assert not (config["num_points"] is None and config["sample_per_ue"] is None), "num_points or sample_per_ue should be set to None"
+    
     # noinspection PyUnresolvedReferences
     ox.settings.max_query_area_size = 2 ** 64
     log.info("Initializing data generation")
     logging.basicConfig(level=logging.INFO)
     # log.info("CPUs: " + config["workers"])
     parent = psutil.Process()
-    workers = parent.cpu_affinity()
+    # workers = parent.cpu_affinity()
+    workers = [0]
     log.info(f"Process {parent.pid} uses {workers} CPUs")
     
     plt.style.use("dark_background")
@@ -399,15 +406,23 @@ def generate_data(config: DictConfig) -> None:
     data.save_cell_info()
     
     log.info("Generating random sizes")
+    
+    if config["num_points"] is not None:
+        num_points = config["num_points"]
+    else:
+        num_points = config["sample_per_ue"] * len(data.ue_positions)
+    
     random_sizes = [
         DataGen.generate_random_code(
             mean=config["random_size_mean"], std=config["random_size_std"],
             min_value=config["random_size_min"], max_value=config["random_size_max"]
         )
-        for _ in tqdm(range(config["num_points"]), total=config["num_points"], file=sys.stdout)
+        for _ in tqdm(range(num_points), total=num_points, file=sys.stdout)
     ]
     
     log.info("Generating data")
     
-    for i in tqdm(range(config["num_points"]), total=config["num_points"], file=sys.stdout):
-        data.gen_ran_ue_with_bs((i, random_sizes[i]))
+    to_use_sample_per_ue = config["sample_per_ue"] is not None
+    for i in tqdm(range(num_points), total=num_points, file=sys.stdout):
+        ue_j = i // config["sample_per_ue"] if to_use_sample_per_ue else -1
+        data.gen_ran_ue_with_bs((i, random_sizes[i], to_use_sample_per_ue, ue_j))
