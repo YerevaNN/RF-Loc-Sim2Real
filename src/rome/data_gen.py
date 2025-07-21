@@ -3,7 +3,8 @@ import logging
 import os
 import sys
 import warnings
-from random import choice
+from collections import defaultdict
+from random import choice, randint
 
 import geopandas
 import matplotlib.pyplot as plt
@@ -213,11 +214,11 @@ class DataGen:
         
         return folder_name
     
-    def get_corresponding_cells(self, lat, lon, south, north, west, east):
-        return self.info_df[(
-            (self.info_df["latitude"] == float(lat)) & (self.info_df["longitude"] == float(lon)) &
-            (self.info_df["cellLatitude"] >= float(south)) & (self.info_df["cellLatitude"] <= float(north)) &
-            (self.info_df["cellLongitude"] >= float(west)) & (self.info_df["cellLongitude"] <= float(east))
+    @staticmethod
+    def get_corresponding_cells(sub_info_df, south, north, west, east):
+        return sub_info_df[(
+            (sub_info_df["cellLatitude"] >= float(south)) & (sub_info_df["cellLatitude"] <= float(north)) &
+            (sub_info_df["cellLongitude"] >= float(west)) & (sub_info_df["cellLongitude"] <= float(east))
         )]
     
     def generate_plot(self, center_lat, center_lon, half_square_size, custom_crs):
@@ -308,61 +309,62 @@ class DataGen:
             json.dump(info_dict, f, indent=4)
         plt.close(fig)
     
-    def gen_ran_ue_with_bs(self, args: tuple[int, int, bool, int]):
-        i, half_square_size_meters, to_use_sample_per_ue, ue_j = args
+    def gen_ran_ue_with_bs(self, args: tuple[int, int, list[int]]):
+        # i, half_square_size_meters, to_use_sample_per_ue, ue_j = args
+        start_idx, ue_idx, sizes = args
         
-        if to_use_sample_per_ue:
-            random_ue_lat, random_ue_lon = self.ue_positions[ue_j]
-        else:
-            random_ue_lat, random_ue_lon = choice(self.ue_positions)
-        center_lat, center_lon = DataGen.random_point(
-            random_ue_lat, random_ue_lon, half_square_size_meters, self.random_point_scale_factor
-        )
-        north, south, east, west = DataGen.get_cardinal_pos(center_lat, center_lon, half_square_size_meters)
-        
-        assert south <= random_ue_lat <= north and west <= random_ue_lon <= east
-        
-        corresponding_cells: pd.DataFrame = self.get_corresponding_cells(
-            random_ue_lat, random_ue_lon, south, north, west, east
-        )
-        if corresponding_cells.empty:
-            return
-        
-        campaign_id = int(corresponding_cells["campaignID"].values[0])
-        
-        if self.simulated:
-            id_columns = ["bs_idx"]
-            other_columns = ["NPCI", "eNodeBID", "MNC", "cellLatitude", "cellLongitude", "interpolated"]
-        else:
-            id_columns = [
-                "NPCI", "eNodeID" if self.oslo else "eNodeBID", "MNC", "cellLatitude", "cellLongitude", "interpolated"
-            ]
-            other_columns = []
-        measurement_columns = ["RSSI", "NSINR", "NRSRP", "NRSRQ", "ToA"]
-        unique_cells = corresponding_cells[id_columns + measurement_columns + other_columns].drop_duplicates(id_columns)
-        
-        custom_crs = DataGen.create_custom_tm_crs(center_lat, center_lon)
-        try:
-            fig, _ = self.generate_plot(
-                center_lat, center_lon, half_square_size_meters, custom_crs
+        random_ue_lat, random_ue_lon = self.ue_positions[ue_idx]
+        sub_info_df = self.info_df[((self.info_df["latitude"] == float(random_ue_lat)) & (self.info_df["longitude"] == float(random_ue_lon)))]
+        for i, half_square_size_meters in enumerate(sizes):
+            center_lat, center_lon = DataGen.random_point(
+                random_ue_lat, random_ue_lon, half_square_size_meters, self.random_point_scale_factor
             )
-        except Exception as ex:
-            log.error(ex)
-            self.gen_ran_ue_with_bs((i, half_square_size_meters))
-            return
-        
-        info_dict = {
-            "campaign_id": campaign_id,
-            "center_coord": (center_lat, center_lon),
-            "half_square_size_meters": half_square_size_meters
-        }
-        info_dict.update(
-            self.project_ue_and_cells(
-                custom_crs, half_square_size_meters, (random_ue_lat, random_ue_lon), unique_cells
+            
+            north, south, east, west = DataGen.get_cardinal_pos(center_lat, center_lon, half_square_size_meters)
+            assert south <= random_ue_lat <= north and west <= random_ue_lon <= east
+            
+            corresponding_cells: pd.DataFrame = self.get_corresponding_cells(
+                sub_info_df, south, north, west, east
             )
-        )
+            
+            if corresponding_cells.empty:
+                continue
         
-        self.save_visualization(fig, info_dict, campaign_id, random_ue_lat, random_ue_lon, i)
+            campaign_id = int(corresponding_cells["campaignID"].values[0])
+        
+            if self.simulated:
+                id_columns = ["bs_idx"]
+                other_columns = ["NPCI", "eNodeBID", "MNC", "cellLatitude", "cellLongitude", "interpolated"]
+            else:
+                id_columns = [
+                    "NPCI", "eNodeID" if self.oslo else "eNodeBID", "MNC", "cellLatitude", "cellLongitude", "interpolated"
+                ]
+                other_columns = []
+            measurement_columns = ["RSSI", "NSINR", "NRSRP", "NRSRQ", "ToA"]
+            unique_cells = corresponding_cells[id_columns + measurement_columns + other_columns].drop_duplicates(id_columns)
+            
+            custom_crs = DataGen.create_custom_tm_crs(center_lat, center_lon)
+            try:
+                fig, _ = self.generate_plot(
+                    center_lat, center_lon, half_square_size_meters, custom_crs
+                )
+            except Exception as ex:
+                log.error(ex)
+                self.gen_ran_ue_with_bs((i, half_square_size_meters))
+                return
+        
+            info_dict = {
+                "campaign_id": campaign_id,
+                "center_coord": (center_lat, center_lon),
+                "half_square_size_meters": half_square_size_meters
+            }
+            info_dict.update(
+                self.project_ue_and_cells(
+                    custom_crs, half_square_size_meters, (random_ue_lat, random_ue_lon), unique_cells
+                )
+            )
+            
+            self.save_visualization(fig, info_dict, campaign_id, random_ue_lat, random_ue_lon, start_idx + i)
     
     @staticmethod
     def generate_random_code(mean: float, std: float, min_value: float, max_value: float) -> int:
@@ -412,17 +414,24 @@ def generate_data(config: DictConfig) -> None:
     else:
         num_points = config["sample_per_ue"] * len(data.ue_positions)
     
-    random_sizes = [
-        DataGen.generate_random_code(
-            mean=config["random_size_mean"], std=config["random_size_std"],
-            min_value=config["random_size_min"], max_value=config["random_size_max"]
+    to_use_sample_per_ue = config["sample_per_ue"] is not None
+    random_sizes = defaultdict(list)
+    for i in tqdm(range(num_points), total=num_points, file=sys.stdout):
+        if to_use_sample_per_ue:
+            tmp_idx = i // config["sample_per_ue"]
+        else:
+            tmp_idx = randint(0, len(data.ue_positions) - 1)
+        random_sizes[tmp_idx].append(
+            DataGen.generate_random_code(
+                mean=config["random_size_mean"], std=config["random_size_std"],
+                min_value=config["random_size_min"], max_value=config["random_size_max"]
+            )
         )
-        for _ in tqdm(range(num_points), total=num_points, file=sys.stdout)
-    ]
     
     log.info("Generating data")
-    
-    to_use_sample_per_ue = config["sample_per_ue"] is not None
-    for i in tqdm(range(num_points), total=num_points, file=sys.stdout):
-        ue_j = i // config["sample_per_ue"] if to_use_sample_per_ue else -1
-        data.gen_ran_ue_with_bs((i, random_sizes[i], to_use_sample_per_ue, ue_j))
+
+    start_idx = 0
+    for i, (ue_idx, sizes) in tqdm(enumerate(random_sizes.items()), total=len(random_sizes), file=sys.stdout):
+        data.gen_ran_ue_with_bs((start_idx, ue_idx, sizes))
+        start_idx += len(sizes)
+        
