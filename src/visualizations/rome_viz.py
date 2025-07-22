@@ -103,7 +103,7 @@ class DatasetVisualizer:
     
     @staticmethod
     def plot_rome_dataset(ax, edges: GeoDataFrame, gdfs):
-        edges.plot(ax=ax, linewidth=1, edgecolor="gray", zorder=0)
+        edges.plot(ax=ax, linewidth=1, edgecolor="gray", zorder=1)
         marker_color_map = {
             "medium_test": ("o", "pink"),
             "medium_val": ("o", "lime"),
@@ -119,6 +119,7 @@ class DatasetVisualizer:
                 color=marker_color_map[split][1],
                 markersize=3,
                 label=" ".join(split.split("_")).title() + f" ({len(gdf)} UEs)",
+                zorder=0,
             )
         
         ax.set_title("Street Map with UE Coordinates")
