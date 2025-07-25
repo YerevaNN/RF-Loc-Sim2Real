@@ -69,92 +69,98 @@ class RomeDataset(Dataset):
         tuple[np.ndarray, np.ndarray, np.ndarray, int, np.ndarray],
         tuple[np.ndarray, np.ndarray, np.ndarray, int, np.ndarray, np.ndarray, np.ndarray]
     ]:
-        if self.split == "train":
-            idx = random.randint(0, len(self.json_map_paths) - 1)
-        json_path, npz_path, dataset_idx = self.json_map_paths[idx]
-        map_img = np.load(npz_path)["image"]
-        
-        if self.map_channels == "buildings":
-            map_img = map_img[:, :, 0]
-        elif self.map_channels == "roads":
-            map_img = map_img[:, :, 1]
-        elif self.map_channels == "both":
-            map_img = np.mean(map_img[:, :, :2], axis=-1)
-        
-        map_resized = resize(map_img, (self.map_size, self.map_size))
-        
-        with open(json_path, "r") as file:
-            map_info = json.load(file)
-        orig_image_size = map_info["half_square_size_meters"] * 2 + 1
-        assert orig_image_size == map_img.shape[0] == map_img.shape[1]
-        
-        map_center = np.array(map_info["center_coord"], dtype=np.float32)
-        ue_initial_lat_lon = np.array(map_info["UE"]["lat_lon"], dtype=np.float32)
-        ue_info = map_info["UE"]
-        base_stations_info = map_info["BaseStations"]
-        
-        ue_orig_loc_y_x = np.array(ue_info["proj_map_pos"])
-        ue_loc_y_x: np.ndarray = ue_orig_loc_y_x / orig_image_size * self.map_size
-        
-        map_resized = np.expand_dims(map_resized, axis=0).repeat(3, axis=0)
-        map_resized[2] = np.full_like(map_resized[2], self.map_size / orig_image_size)
-        
-        if self.split == "train":
-            random.shuffle(base_stations_info)
-            num_bs = random.randint(self.min_num_bs, min(self.max_num_bs, len(base_stations_info)))
-        else:
-            num_bs = min(self.max_num_bs, len(base_stations_info))
-        
-        base_stations_data = []
-        curr_num_bs = 0
-        
-        for bs in base_stations_info:
-            if self.dataset_types[dataset_idx] == "dataSet" and bs["interpolated"]:
+        while True:
+            try:
+                if self.split == "train":
+                    idx = random.randint(0, len(self.json_map_paths) - 1)
+                json_path, npz_path, dataset_idx = self.json_map_paths[idx]
+                map_img = np.load(npz_path)["image"]
+                
+                if self.map_channels == "buildings":
+                    map_img = map_img[:, :, 0]
+                elif self.map_channels == "roads":
+                    map_img = map_img[:, :, 1]
+                elif self.map_channels == "both":
+                    map_img = np.mean(map_img[:, :, :2], axis=-1)
+                
+                map_resized = resize(map_img, (self.map_size, self.map_size))
+                
+                with open(json_path, "r") as file:
+                    map_info = json.load(file)
+                orig_image_size = map_info["half_square_size_meters"] * 2 + 1
+                assert orig_image_size == map_img.shape[0] == map_img.shape[1]
+                
+                map_center = np.array(map_info["center_coord"], dtype=np.float32)
+                ue_initial_lat_lon = np.array(map_info["UE"]["lat_lon"], dtype=np.float32)
+                ue_info = map_info["UE"]
+                base_stations_info = map_info["BaseStations"]
+                
+                ue_orig_loc_y_x = np.array(ue_info["proj_map_pos"])
+                ue_loc_y_x: np.ndarray = ue_orig_loc_y_x / orig_image_size * self.map_size
+                
+                map_resized = np.expand_dims(map_resized, axis=0).repeat(3, axis=0)
+                map_resized[2] = np.full_like(map_resized[2], self.map_size / orig_image_size)
+                
+                if self.split == "train":
+                    random.shuffle(base_stations_info)
+                    num_bs = random.randint(self.min_num_bs, min(self.max_num_bs, len(base_stations_info)))
+                else:
+                    num_bs = min(self.max_num_bs, len(base_stations_info))
+                
+                base_stations_data = []
+                curr_num_bs = 0
+                
+                for bs in base_stations_info:
+                    if self.dataset_types[dataset_idx] == "dataSet" and bs["interpolated"]:
+                        continue
+                    bs_orig_loc_y_x = np.array(bs["proj_map_pos"])
+                    bs_loc_y_x: np.ndarray = bs_orig_loc_y_x / orig_image_size * self.map_size
+                    
+                    bs_ue_data_values = [
+                        (bs["measurements"][feature] - self.feature_means[feature]) / self.feature_vars[feature]
+                        for feature in self.features
+                    ]
+                    bs_info_slice = (
+                        slice(max(0, int(bs_loc_y_x[0]) - self.eps_image), int(bs_loc_y_x[0]) + self.eps_image),
+                        slice(max(0, int(bs_loc_y_x[1]) - self.eps_image), int(bs_loc_y_x[1]) + self.eps_image)
+                    )
+                    
+                    # Drawing base station location and a feature on the map in the form of a square
+                    map_resized[0][bs_info_slice[0], bs_info_slice[1]] = bs_loc_y_x[0] / self.map_size
+                    map_resized[1][bs_info_slice[0], bs_info_slice[1]] = bs_loc_y_x[1] / self.map_size
+                    map_resized[2][bs_info_slice[0], bs_info_slice[1]] = bs_ue_data_values[0]
+                    
+                    # Saving base station info for sequence
+                    base_stations_data.append(np.concatenate((bs_loc_y_x / self.map_size, bs_ue_data_values)))
+                    
+                    curr_num_bs += 1
+                    if curr_num_bs == num_bs:
+                        break
+                
+                base_stations_data = np.stack(base_stations_data)
+                ue_loc_img = np.zeros_like(map_resized[0])
+                ue_loc_img[tuple(ue_loc_y_x.astype(np.int16))] = 1.0
+                ue_loc_img: np.ndarray = gaussian_filter(ue_loc_img, self.output_gaussian_sigma)
+                ue_loc_img = ue_loc_img / ue_loc_img.max()
+                
+                result = (
+                    map_resized.astype(np.float32),
+                    base_stations_data.astype(np.float32),
+                    ue_loc_img.astype(np.float32),
+                    orig_image_size,
+                    ue_loc_y_x.astype(np.float32)
+                )
+                if self.for_viz:
+                    return result + (
+                        map_center,
+                        ue_initial_lat_lon
+                    )
+                return result
+            except Exception as e:
+                log.error(f"Error in __getitem__: {e}")
+                idx = random.randint(0, len(self.json_map_paths) - 1)
                 continue
-            bs_orig_loc_y_x = np.array(bs["proj_map_pos"])
-            bs_loc_y_x: np.ndarray = bs_orig_loc_y_x / orig_image_size * self.map_size
-            
-            bs_ue_data_values = [
-                (bs["measurements"][feature] - self.feature_means[feature]) / self.feature_vars[feature]
-                for feature in self.features
-            ]
-            bs_info_slice = (
-                slice(max(0, int(bs_loc_y_x[0]) - self.eps_image), int(bs_loc_y_x[0]) + self.eps_image),
-                slice(max(0, int(bs_loc_y_x[1]) - self.eps_image), int(bs_loc_y_x[1]) + self.eps_image)
-            )
-            
-            # Drawing base station location and a feature on the map in the form of a square
-            map_resized[0][bs_info_slice[0], bs_info_slice[1]] = bs_loc_y_x[0] / self.map_size
-            map_resized[1][bs_info_slice[0], bs_info_slice[1]] = bs_loc_y_x[1] / self.map_size
-            map_resized[2][bs_info_slice[0], bs_info_slice[1]] = bs_ue_data_values[0]
-            
-            # Saving base station info for sequence
-            base_stations_data.append(np.concatenate((bs_loc_y_x / self.map_size, bs_ue_data_values)))
-            
-            curr_num_bs += 1
-            if curr_num_bs == num_bs:
-                break
         
-        base_stations_data = np.stack(base_stations_data)
-        ue_loc_img = np.zeros_like(map_resized[0])
-        ue_loc_img[tuple(ue_loc_y_x.astype(np.int16))] = 1.0
-        ue_loc_img: np.ndarray = gaussian_filter(ue_loc_img, self.output_gaussian_sigma)
-        ue_loc_img = ue_loc_img / ue_loc_img.max()
-        
-        result = (
-            map_resized.astype(np.float32),
-            base_stations_data.astype(np.float32),
-            ue_loc_img.astype(np.float32),
-            orig_image_size,
-            ue_loc_y_x.astype(np.float32)
-        )
-        if self.for_viz:
-            return result + (
-                map_center,
-                ue_initial_lat_lon
-            )
-        return result
-    
     def __len__(self):
         if self.split == "train":
             return int(self.crop_per_epoch * self.num_ues)
