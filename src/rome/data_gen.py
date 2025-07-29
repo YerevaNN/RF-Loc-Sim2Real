@@ -3,7 +3,7 @@ import logging
 import os
 import sys
 import warnings
-from random import choice
+from random import choice, shuffle
 
 
 
@@ -514,8 +514,13 @@ def generate_data(config: DictConfig) -> None:
     else:
         if config["num_points"] is not None:
             num_points = config["num_points"]
+            i_iterable = range(num_points)
         else:
             num_points = config["sample_per_ue"] * len(data.ue_positions)
+            i_iterable = list(range(len(data.ue_positions)))
+            shuffle(i_iterable)
+            i_iterable = [i*config['sample_per_ue']+j for i in i_iterable for j in range(config['sample_per_ue'])]
+            
         
         random_sizes = [
         DataGen.generate_random_code(
@@ -528,7 +533,7 @@ def generate_data(config: DictConfig) -> None:
         log.info("Generating data")
 
         to_use_sample_per_ue = config["sample_per_ue"] is not None
-        for i in tqdm(range(num_points), total=num_points, file=sys.stdout):
+        for i in tqdm(i_iterable, total=num_points, file=sys.stdout):
             ue_j = i // config["sample_per_ue"] if to_use_sample_per_ue else -1
             data.gen_ran_ue_with_bs((i, random_sizes[i], to_use_sample_per_ue, ue_j))
         

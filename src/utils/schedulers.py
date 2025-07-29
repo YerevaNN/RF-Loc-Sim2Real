@@ -87,7 +87,7 @@ class WarmupStableDecayLR(LRScheduler):
         interval: str = 'epoch',
         steps_per_epoch: int = None,
     ) -> None:
-        assert warmup_epochs + decay_epochs < max_epochs, "Warmup epochs + decay epochs must be less than or equal to max epochs"
+        assert warmup_epochs + decay_epochs <= max_epochs, "Warmup epochs + decay epochs must be less than or equal to max epochs"
 
         self.interval = interval
         if self.interval == 'step':
@@ -109,11 +109,11 @@ class WarmupStableDecayLR(LRScheduler):
 
         super().__init__(optimizer, last_epoch)
         
-        print(f"warmup_steps: {self.warmup_steps}, decay_steps: {self.decay_steps}, max_steps: {self.max_steps}")
+        print(f"warmup_steps: {self.warmup_steps}, decay_steps: {self.decay_steps}, max_steps: {self.max_steps}, stable_lr: {self.stable_lr}")
     
     def get_lr(self) -> List[float]:
         current_step = self.last_epoch
-        if current_step <= self.warmup_steps:
+        if current_step <= self.warmup_steps and self.warmup_steps > 0:
             # Linear warmup phase
             return [
                 self.warmup_start_lr

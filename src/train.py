@@ -2,6 +2,7 @@ import logging
 from typing import Iterable, Optional
 
 import hydra
+import torch
 from omegaconf import DictConfig, OmegaConf
 from pytorch_lightning import Callback, Trainer
 from pytorch_lightning.loggers import Logger
@@ -64,7 +65,13 @@ def train(config: DictConfig) -> None:
     )
     
     log_hyperparameters(config=config, algorithm=algorithm, trainer=trainer)
-    
+
+    if config["ckpt_path"] is not None:
+        log.info(f"Loading weights from {config['ckpt_path']}")
+        ckpt = torch.load(config["ckpt_path"])
+        algorithm.load_state_dict(ckpt['state_dict'])
+        config["ckpt_path"] = None
+
     # Train the model
     log.info("Starting training!")
     trainer.fit(algorithm, datamodule=datamodule, ckpt_path=config["ckpt_path"])

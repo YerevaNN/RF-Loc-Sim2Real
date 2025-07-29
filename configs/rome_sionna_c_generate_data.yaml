@@ -10,9 +10,15 @@ sionna_csv: ${oc.env:ROME_SIONNA_C_CSV}
 out_dir: ${oc.env:ROME_SIONNA_OUT_DIR_C}
 random_point_scale_factor: 0.9
 nsew: [ 41.90, 41.80, 12.56, 12.45 ]
-num_workers: 8
+workers: null
 
 num_points: 1500000
+sample_per_ue: null
+
+grid_size: null
+grid_subspace_start: null
+grid_subspace_end: null
+
 random_size_mean: 300
 random_size_std: 0
 random_size_min: 100
