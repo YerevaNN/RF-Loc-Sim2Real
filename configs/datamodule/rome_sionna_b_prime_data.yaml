@@ -51,4 +51,4 @@ decimal_places: 10
 eps_image: 3
 for_viz: False
 map_channels: buildings # buildings, roads, both
-crops_per_epoch: 0.1
+crops_per_epoch: 0.3

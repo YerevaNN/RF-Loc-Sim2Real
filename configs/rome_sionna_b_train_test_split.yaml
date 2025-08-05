@@ -14,7 +14,7 @@ hard_test: 1.0
 hard_val_nsew: [ 41.84, 41.83, 12.474, 12.468 ]
 medium_train: 0.9
 medium_test: 0.5
-easy_train: 0.9
+easy_train: 0.5
 easy_test: 0.5
 
 hard_margin_meters: 601

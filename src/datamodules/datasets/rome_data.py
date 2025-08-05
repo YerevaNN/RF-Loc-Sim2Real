@@ -160,7 +160,7 @@ class RomeDataset(Dataset):
                 log.error(f"Error in __getitem__: {e}")
                 idx = random.randint(0, len(self.json_map_paths) - 1)
                 continue
-        
+    
     def __len__(self):
         if self.split == "train":
             return int(self.crop_per_epoch * self.num_ues)

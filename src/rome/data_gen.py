@@ -5,8 +5,6 @@ import sys
 import warnings
 from random import choice, shuffle
 
-
-
 import geopandas
 import matplotlib.pyplot as plt
 import numpy as np
@@ -88,7 +86,7 @@ class DataGen:
         with tqdm(total=1, desc="Loading buildings") as pbar:
             self.buildings = ox.features_from_bbox(bbox=(north, south, east, west), tags={"building": True})
             pbar.update(1)
-            
+        
         log.info("Getting all the roads")
         # noinspection PyPep8Naming
         with tqdm(total=1, desc="Loading roads") as pbar:
@@ -102,11 +100,13 @@ class DataGen:
         
         total_campaigns = len(self.info_df["campaignID"].unique())
         for i, campaign_id in enumerate(self.info_df["campaignID"].unique()):
-            log.info(f"Creating folders for campaign {i+1}/{total_campaigns}")
+            log.info(f"Creating folders for campaign {i + 1}/{total_campaigns}")
             campaign_id = int(campaign_id)
-            for lat, lon in tqdm(self.info_df[
-                self.info_df["campaignID"] == campaign_id
-            ][["latitude", "longitude"]].drop_duplicates().values):
+            for lat, lon in tqdm(
+                self.info_df[
+                    self.info_df["campaignID"] == campaign_id
+                ][["latitude", "longitude"]].drop_duplicates().values
+                ):
                 os.makedirs(
                     os.path.join(self.out_dir, str(campaign_id), DataGen.create_folder_name(lat, lon)),
                     exist_ok=True
@@ -353,7 +353,7 @@ class DataGen:
         try:
             fig, _ = self.generate_plot(
                 center_lat, center_lon, half_square_size_meters, custom_crs
-                )
+            )
         except Exception as ex:
             log.error(ex)
             self.gen_ran_ue_with_bs((i, half_square_size_meters))
@@ -371,8 +371,7 @@ class DataGen:
         )
         
         self.save_visualization(fig, info_dict, campaign_id, random_ue_lat, random_ue_lon, i)
-
-
+    
     @staticmethod
     def get_ue_crops(nsew, grid_size, half_square_size_meters):
         crops = []
@@ -391,7 +390,8 @@ class DataGen:
         start_idx, ue_idx, grid_size, grid_subspace, half_square_size_meters = args
         
         ue_lat, ue_lon = self.ue_positions[ue_idx]
-        sub_info_df = self.info_df[((self.info_df["latitude"] == float(ue_lat)) & (self.info_df["longitude"] == float(ue_lon)))]
+        sub_info_df = self.info_df[
+            ((self.info_df["latitude"] == float(ue_lat)) & (self.info_df["longitude"] == float(ue_lon)))]
         
         nsew = DataGen.get_cardinal_pos(ue_lat, ue_lon, half_square_size_meters * self.random_point_scale_factor)
         crops, centers = DataGen.get_ue_crops(nsew, grid_size, half_square_size_meters)
@@ -409,20 +409,22 @@ class DataGen:
             
             if corresponding_cells.empty:
                 continue
-                    
-        
+            
             campaign_id = int(corresponding_cells["campaignID"].values[0])
-        
+            
             if self.simulated:
                 id_columns = ["bs_idx"]
                 other_columns = ["NPCI", "eNodeBID", "MNC", "cellLatitude", "cellLongitude", "interpolated"]
             else:
                 id_columns = [
-                    "NPCI", "eNodeID" if self.oslo else "eNodeBID", "MNC", "cellLatitude", "cellLongitude", "interpolated"
+                    "NPCI", "eNodeID" if self.oslo else "eNodeBID", "MNC", "cellLatitude", "cellLongitude",
+                    "interpolated"
                 ]
                 other_columns = []
             measurement_columns = ["RSSI", "NSINR", "NRSRP", "NRSRQ", "ToA"]
-            unique_cells = corresponding_cells[id_columns + measurement_columns + other_columns].drop_duplicates(id_columns)
+            unique_cells = corresponding_cells[id_columns + measurement_columns + other_columns].drop_duplicates(
+                id_columns
+            )
             
             custom_crs = DataGen.create_custom_tm_crs(center_lat, center_lon)
             try:
@@ -433,7 +435,7 @@ class DataGen:
                 log.error(ex)
                 # self.gen_ran_ue_with_bs((i, half_square_size_meters))
                 return
-        
+            
             info_dict = {
                 "campaign_id": campaign_id,
                 "center_coord": (center_lat, center_lon),
@@ -460,8 +462,10 @@ class DataGen:
 
 def generate_data(config: DictConfig) -> None:
     if config["grid_size"] is None:
-        assert config["num_points"] is None or config["sample_per_ue"] is None, "num_points and sample_per_ue should not be set at the same time"
-        assert not (config["num_points"] is None and config["sample_per_ue"] is None), "num_points or sample_per_ue should be set to None"
+        assert config["num_points"] is None or config[
+            "sample_per_ue"] is None, "num_points and sample_per_ue should not be set at the same time"
+        assert not (config["num_points"] is None and config[
+            "sample_per_ue"] is None), "num_points or sample_per_ue should be set to None"
     
     # noinspection PyUnresolvedReferences
     ox.settings.max_query_area_size = 2 ** 64
@@ -507,7 +511,9 @@ def generate_data(config: DictConfig) -> None:
         
         log.info("Generating data")
         start_idx = 0
-        for i, (ue_idx, size) in tqdm(enumerate(zip(range(len(data.ue_positions)), random_sizes)), total=len(data.ue_positions), file=sys.stdout):
+        for i, (ue_idx, size) in tqdm(
+            enumerate(zip(range(len(data.ue_positions)), random_sizes)), total=len(data.ue_positions), file=sys.stdout
+        ):
             data.gen_ue_with_bs_grid((start_idx, ue_idx, grid_size, grid_subspace, size))
             start_idx += len(grid_subspace)
     
@@ -519,21 +525,19 @@ def generate_data(config: DictConfig) -> None:
             num_points = config["sample_per_ue"] * len(data.ue_positions)
             i_iterable = list(range(len(data.ue_positions)))
             shuffle(i_iterable)
-            i_iterable = [i*config['sample_per_ue']+j for i in i_iterable for j in range(config['sample_per_ue'])]
-            
+            i_iterable = [i * config['sample_per_ue'] + j for i in i_iterable for j in range(config['sample_per_ue'])]
         
         random_sizes = [
-        DataGen.generate_random_code(
-            mean=config["random_size_mean"], std=config["random_size_std"],
-            min_value=config["random_size_min"], max_value=config["random_size_max"]
+            DataGen.generate_random_code(
+                mean=config["random_size_mean"], std=config["random_size_std"],
+                min_value=config["random_size_min"], max_value=config["random_size_max"]
             )
-                for _ in tqdm(range(num_points), total=num_points, file=sys.stdout)
-            ]
+            for _ in tqdm(range(num_points), total=num_points, file=sys.stdout)
+        ]
         
         log.info("Generating data")
-
+        
         to_use_sample_per_ue = config["sample_per_ue"] is not None
         for i in tqdm(i_iterable, total=num_points, file=sys.stdout):
             ue_j = i // config["sample_per_ue"] if to_use_sample_per_ue else -1
             data.gen_ran_ue_with_bs((i, random_sizes[i], to_use_sample_per_ue, ue_j))
-        
