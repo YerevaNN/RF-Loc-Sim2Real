@@ -65,13 +65,13 @@ def train(config: DictConfig) -> None:
     )
     
     log_hyperparameters(config=config, algorithm=algorithm, trainer=trainer)
-
-    if config["ckpt_path"] is not None:
+    
+    if config["ckpt_path"] is not None and config["load_weights_only"]:
         log.info(f"Loading weights from {config['ckpt_path']}")
         ckpt = torch.load(config["ckpt_path"])
         algorithm.load_state_dict(ckpt['state_dict'])
         config["ckpt_path"] = None
-
+    
     # Train the model
     log.info("Starting training!")
     trainer.fit(algorithm, datamodule=datamodule, ckpt_path=config["ckpt_path"])

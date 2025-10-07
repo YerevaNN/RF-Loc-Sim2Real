@@ -19,6 +19,7 @@ defaults:
   - _self_
 
 ckpt_path: null
+load_weights_only: True
 
 hydra:
   run:
