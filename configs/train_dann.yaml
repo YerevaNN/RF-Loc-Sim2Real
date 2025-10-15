@@ -1,0 +1,29 @@
+# @package _global_
+name: train
+seed: 0
+print_config: True
+ignore_warnings: True
+terminal_col: null
+terminal_row: 24
+
+defaults:
+  - datamodule: rome_dann_data
+  - optimizer: adam
+  - scheduler: null
+  - algorithm: rome_dann
+  - network: vit_pp_dann  # or vitL_pp_dann for larger model
+  - trainer: default
+  - callbacks: [ model_checkpoint_0, model_checkpoint_1, model_checkpoint_2, decay_phase_checkpoint ]
+  - loggers: [ aim ]
+  - strategy: null
+  - _self_
+
+ckpt_path: null
+load_weights_only: True
+
+hydra:
+  run:
+    dir: ${oc.env:OUTPUT_DIR}/${now:%Y-%m-%d_%H-%M-%S.%f}
+  job:
+    chdir: True
+

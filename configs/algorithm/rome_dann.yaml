@@ -1,0 +1,20 @@
+_target_: src.algorithms.RomeDANN
+
+name: rome_dann
+error_tolerance: [ 1, 3, 5, 10, 30, 50, 100, 200 ]
+use_ce: True
+use_dice: False
+
+# DANN-specific: global weight for domain adversarial loss
+# The actual lambda is scheduled from ~0 to domain_loss_weight during training
+domain_loss_weight: 1.0
+
+compiled:
+  _target_: src.utils.CompileParams
+  fullgraph: False
+  dynamic: null
+  backend: inductor
+  mode: null
+  options: null
+  disable: True
+

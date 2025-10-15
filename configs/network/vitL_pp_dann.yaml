@@ -1,0 +1,34 @@
+_target_: src.networks.ViTPlusPlusDANN
+
+# Task head
+num_classes: 1
+image_size: 224
+
+# Sequence embedding
+mlp_input_dim: 6
+
+# ViT backbone (large)
+v_num_channels: 3
+v_patch_size: 14
+v_hidden_size: 1024
+v_num_hidden_layers: 24
+v_num_attention_heads: 16
+res_hidden_states: null  # e.g., [ 1, 5, 9, 13 ]
+
+# Decoder
+use_upernet: False
+up_pool_scales: [ 1, 2, 4, 7 ]
+neck_input_dim: null
+neck_scales: null
+neck_size: null
+pre_out_channels: 3
+
+# Pretrained & type
+pretrained: facebook/dinov2-large
+model_type: dino_v2
+use_pe: False
+
+# DANN
+domain_hidden_dim: 128
+
+

@@ -103,8 +103,10 @@ class ViTPlusPlusUPerNet(nn.Module):
             num_classes, kernel_size=3, padding="same"
         )
     
-    def forward(
-        self, image, sequence=None,
+    def extract_features(
+        self,
+        image,
+        sequence=None,
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None
@@ -120,36 +122,49 @@ class ViTPlusPlusUPerNet(nn.Module):
         h = w = int(self.num_tokes ** 0.5)
         
         j = 0
-        output = []
+        outputs_2d = []
         for i, v in enumerate(vit_hidden_states + (vit_out.last_hidden_state,)):
             if self.res_hidden_states and i not in self.res_hidden_states:
                 continue
-            bn = self.bns[j] if not self.use_upernet else lambda x: x
-            pn = self.pre_necks[j] if self.neck else lambda x: x
+            bn = self.bns[j] if not self.use_upernet else (lambda x: x)
+            pn = self.pre_necks[j] if self.neck else (lambda x: x)
             j += 1
             depth = self.neck_input_dim or self.v_hidden_size
             o = v[:, 1:self.num_tokes + 1]
             o = pn(o).reshape(-1, h, w, depth).permute(0, 3, 1, 2)
             o = bn(o)
-            output.append(o)
+            outputs_2d.append(o)
         
         if self.use_upernet:
             if self.neck:
-                output = list(self.neck(output))
-            # Up path
-            output[-1] = self.PPN(output[-1])
-            output = self.FPN(output)
+                outputs_2d = list(self.neck(outputs_2d))
+            outputs_2d[-1] = self.PPN(outputs_2d[-1])
+            feats = self.FPN(outputs_2d)
         else:
-            # output = torch.stack(output).mean(dim=0)
-            output = torch.stack(output).mean(dim=0)
+            feats = torch.stack(outputs_2d).mean(dim=0)
         
-        # matching the embedding dimension for proper unpatching
         if self.unpatch_match:
-            output = self.unpatch_match(output)
+            feats = self.unpatch_match(feats)
         
         if not self.neck:
             h = w = int(self.num_tokes ** 0.5)
-            # unpatching the output
-            output = unpatch(output, h, w, self.head.in_channels, self.v_patch_size)
+            feats = unpatch(feats, h, w, self.head.in_channels, self.v_patch_size)
         
-        return self.head(output)
+        return feats
+
+    def predict_from_features(self, features):
+        return self.head(features)
+
+    def forward(
+        self, image, sequence=None,
+        output_attentions: Optional[bool] = None,
+        output_hidden_states: Optional[bool] = None,
+        return_dict: Optional[bool] = None
+    ):
+        feats = self.extract_features(
+            image, sequence,
+            output_attentions=output_attentions,
+            output_hidden_states=output_hidden_states,
+            return_dict=return_dict
+        )
+        return self.predict_from_features(feats)

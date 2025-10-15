@@ -1,1 +1,2 @@
 from src.algorithms.rome_transformer_unet import RomeTransformerUnet
+from src.algorithms.rome_dann import RomeDANN
