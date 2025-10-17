@@ -118,12 +118,17 @@ class ViTPlusPlusUPerNet(nn.Module):
             return_dict=return_dict
         )
         vit_hidden_states = vit_out.hidden_states
-        
+        return vit_hidden_states, vit_out.last_hidden_state
+    
+    def extract_cls_feature(self, features):
+        return features[1][0]
+
+    def predict_from_features(self, features):
         h = w = int(self.num_tokes ** 0.5)
-        
+        vit_hidden_states, vit_last_hidden_state = features
         j = 0
         outputs_2d = []
-        for i, v in enumerate(vit_hidden_states + (vit_out.last_hidden_state,)):
+        for i, v in enumerate(vit_hidden_states + (vit_last_hidden_state,)):
             if self.res_hidden_states and i not in self.res_hidden_states:
                 continue
             bn = self.bns[j] if not self.use_upernet else (lambda x: x)
@@ -150,33 +155,7 @@ class ViTPlusPlusUPerNet(nn.Module):
             h = w = int(self.num_tokes ** 0.5)
             feats = unpatch(feats, h, w, self.head.in_channels, self.v_patch_size)
         
-        return feats
-
-    def extract_cls_feature(
-        self,
-        image,
-        sequence=None,
-        output_attentions: Optional[bool] = None,
-        output_hidden_states: Optional[bool] = None,
-        return_dict: Optional[bool] = None
-    ):
-        """
-        Returns the transformer [CLS] token embedding from ViTPlusPlus.
-
-        This is a compact global representation suitable for tasks like
-        domain classification. It does not perform any 2D reshaping/fusion.
-        """
-        vit_out = self.vit_pp(
-            image, sequence,
-            output_attentions=output_attentions,
-            output_hidden_states=output_hidden_states,
-            return_dict=return_dict
-        )
-        # BaseModelOutputWithPooling: pooler_output is CLS token (with model-specific LN when applicable)
-        return vit_out.pooler_output
-
-    def predict_from_features(self, features):
-        return self.head(features)
+        return self.head(feats)
 
     def forward(
         self, image, sequence=None,

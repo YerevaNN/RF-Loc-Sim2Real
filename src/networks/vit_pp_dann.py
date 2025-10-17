@@ -120,18 +120,10 @@ class ViTPlusPlusDANN(nn.Module):
         logits_y = self.backbone.predict_from_features(feats)
 
         # Domain prediction from CLS token with gradient reversal
-        cls = self.backbone.extract_cls_feature(
-            image,
-            sequence,
-            output_attentions=output_attentions,
-            output_hidden_states=output_hidden_states,
-            return_dict=return_dict,
-        )
+        cls = self.backbone.extract_cls_feature(feats)
         cls_rev = self.grl(cls)
         logits_d = self.domain_head(cls_rev).view(cls.size(0))
 
         if return_features:
             return logits_y, logits_d, feats
         return logits_y, logits_d
-
-
