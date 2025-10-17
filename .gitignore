@@ -209,3 +209,11 @@ __marimo__/
 .aim
 outputs
 *__pycache__*
+
+# Ararat's stuff
+slurm_*
+**.ipynb
+!rome.ipynb
+run_*
+count_valid_crops.py
+cache
