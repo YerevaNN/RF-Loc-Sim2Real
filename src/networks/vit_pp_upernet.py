@@ -152,6 +152,29 @@ class ViTPlusPlusUPerNet(nn.Module):
         
         return feats
 
+    def extract_cls_feature(
+        self,
+        image,
+        sequence=None,
+        output_attentions: Optional[bool] = None,
+        output_hidden_states: Optional[bool] = None,
+        return_dict: Optional[bool] = None
+    ):
+        """
+        Returns the transformer [CLS] token embedding from ViTPlusPlus.
+
+        This is a compact global representation suitable for tasks like
+        domain classification. It does not perform any 2D reshaping/fusion.
+        """
+        vit_out = self.vit_pp(
+            image, sequence,
+            output_attentions=output_attentions,
+            output_hidden_states=output_hidden_states,
+            return_dict=return_dict
+        )
+        # BaseModelOutputWithPooling: pooler_output is CLS token (with model-specific LN when applicable)
+        return vit_out.pooler_output
+
     def predict_from_features(self, features):
         return self.head(features)
 

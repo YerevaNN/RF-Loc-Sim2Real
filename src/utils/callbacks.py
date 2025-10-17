@@ -25,6 +25,7 @@ class DecayPhaseCheckpoint(Callback):
     def on_train_batch_end(
         self, trainer: pl.Trainer, pl_module: pl.LightningModule, outputs, batch, batch_idx
     ) -> None:
+        # print(trainer.lr_scheduler)
         scheduler_config = trainer.lr_scheduler_configs[0]
         scheduler = scheduler_config.scheduler
 

@@ -5,7 +5,8 @@ from typing import Any
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from omegaconf import DictConfig
+import hydra
+from omegaconf import DictConfig, OmegaConf
 
 from src.algorithms.algorithm_base import AlgorithmBase
 from src.utils import CompileParams, dice_loss
@@ -55,6 +56,8 @@ class RomeDANN(AlgorithmBase):
             network_conf=network_conf,
             gpu=gpu
         )
+        # Enable manual optimization to support dual optimizers
+        self.automatic_optimization = False
         
         assert use_ce or use_dice, "Loss function is not specified."
         self.use_ce = use_ce
@@ -62,6 +65,56 @@ class RomeDANN(AlgorithmBase):
         self.mse = nn.MSELoss(reduction='none')
         self.error_tolerance = error_tolerance
         self.domain_loss_weight = domain_loss_weight
+    
+    # ----- Dual optimizers (task vs domain) -----
+    def configure_optimizers(self):
+        """
+        Create two optimizers:
+          - Task optimizer: backbone + task head parameters (feature extractor + predictor)
+          - Domain optimizer: domain discriminator parameters only
+        Both are instantiated from the same optimizer config by default.
+        If a scheduler config is provided, attach ONE scheduler to the task optimizer
+        using the same dictionary structure as in AlgorithmBase (interval/monitor handling).
+        """
+        # Instantiate a base optimizer config from Hydra
+        opt_conf = OmegaConf.create(self.optimizer_conf)
+        # Collect parameter groups from the network
+        task_params = list(self.network_field.task_parameters())
+        domain_params = list(self.network_field.domain_parameters())
+        
+        opt_task = hydra.utils.instantiate(opt_conf, params=filter(lambda p: p.requires_grad, task_params))
+        opt_domain = hydra.utils.instantiate(opt_conf, params=filter(lambda p: p.requires_grad, domain_params))
+        
+        # Default return: two optimizers, optionally with schedulers attached to BOTH
+        if self.scheduler_conf is None:
+            return [opt_task, opt_domain]
+
+        # Build scheduler dicts for each optimizer (mirrors AlgorithmBase)
+        def build_scheduler_for(optimizer):
+            _conf = OmegaConf.create(self.scheduler_conf)
+            _monitor = _conf.get("monitor", None)
+            _interval = _conf.get("interval", "epoch")
+            if "monitor" in _conf:
+                del _conf.monitor
+            _extra = {"optimizer": optimizer}
+            if _interval == 'step':
+                if not self.trainer.max_epochs or self.trainer.max_epochs == -1:
+                    raise ValueError("max_epochs must be set in trainer for step-based scheduling.")
+                steps_per_epoch = self.trainer.estimated_stepping_batches // self.trainer.max_epochs
+                _extra['steps_per_epoch'] = steps_per_epoch
+            _scheduler = hydra.utils.instantiate(_conf, **_extra)
+            _sch_opt = {"scheduler": _scheduler, "interval": _interval}
+            if _monitor:
+                _sch_opt["monitor"] = _monitor
+            return _sch_opt
+
+        sch_task = build_scheduler_for(opt_task)
+        sch_domain = build_scheduler_for(opt_domain)
+
+        return [
+            {"optimizer": opt_task, "lr_scheduler": sch_task},
+            {"optimizer": opt_domain, "lr_scheduler": sch_domain},
+        ]
     
     def update_grl_lambda(self):
         """Update GRL lambda based on training progress"""
@@ -96,6 +149,10 @@ class RomeDANN(AlgorithmBase):
         Returns:
             Dictionary with task_loss, domain_loss, total_loss, and accuracy metrics
         """
+        
+        # Grab optimizers for manual optimization
+        opt_task, opt_domain = self.optimizers()
+        
         source_batch, target_batch = batch
         
         # Unpack source batch
@@ -136,8 +193,19 @@ class RomeDANN(AlgorithmBase):
         domain_labels = torch.cat([source_domain_labels, target_domain_labels], dim=0)
         domain_loss = F.binary_cross_entropy_with_logits(domain_logits, domain_labels)
         
-        # ===== TOTAL LOSS =====
-        # Note: GRL already reverses gradients for domain classifier, so we just add
+        # ===== MANUAL OPTIMIZATION =====
+        opt_task.zero_grad(set_to_none=True)
+        opt_domain.zero_grad(set_to_none=True)
+        
+        # Backprop task first (retain graph for domain), GRL flips gradients w.r.t. features
+        self.manual_backward(task_loss, retain_graph=True)
+        self.manual_backward(domain_loss)
+        
+        # Optional grad clipping could be added here
+        opt_task.step()
+        opt_domain.step()
+        
+        # ===== TOTAL LOSS (for logging/return only) =====
         total_loss = task_loss + domain_loss
         
         # ===== METRICS =====

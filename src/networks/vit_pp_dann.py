@@ -79,14 +79,22 @@ class ViTPlusPlusDANN(nn.Module):
         # GRL for domain adaptation
         self.grl = GRL(lambd=0.0)
 
-        # Domain classifier: global pooled features -> 1-logit domain score
-        in_channels = self.backbone.head.in_channels
-        self.domain_pool = nn.AdaptiveAvgPool2d(1)
+        # Domain classifier on CLS vector: MLP -> 1-logit domain score
+        in_dim = self.backbone.v_hidden_size
         self.domain_head = nn.Sequential(
-            nn.Conv2d(in_channels, domain_hidden_dim, kernel_size=1),
+            nn.Linear(in_dim, domain_hidden_dim),
             nn.ReLU(inplace=True),
-            nn.Conv2d(domain_hidden_dim, 1, kernel_size=1),
+            nn.Linear(domain_hidden_dim, 1),
         )
+
+    # ----- Parameter groups for separate optimizers -----
+    def task_parameters(self):
+        """Parameters for the task branch (feature extractor + task head)."""
+        return self.backbone.parameters()
+
+    def domain_parameters(self):
+        """Parameters for the domain discriminator branch only."""
+        return self.domain_head.parameters()
 
     @torch.no_grad()
     def set_lambda(self, lambd: float):
@@ -111,10 +119,16 @@ class ViTPlusPlusDANN(nn.Module):
         )
         logits_y = self.backbone.predict_from_features(feats)
 
-        # Domain prediction with gradient reversal
-        feats_rev = self.grl(feats)
-        dom = self.domain_pool(feats_rev)
-        logits_d = self.domain_head(dom).view(dom.size(0))
+        # Domain prediction from CLS token with gradient reversal
+        cls = self.backbone.extract_cls_feature(
+            image,
+            sequence,
+            output_attentions=output_attentions,
+            output_hidden_states=output_hidden_states,
+            return_dict=return_dict,
+        )
+        cls_rev = self.grl(cls)
+        logits_d = self.domain_head(cls_rev).view(cls.size(0))
 
         if return_features:
             return logits_y, logits_d, feats
