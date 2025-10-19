@@ -115,6 +115,13 @@ class RomeDANN(AlgorithmBase):
             {"optimizer": opt_task, "lr_scheduler": sch_task},
             {"optimizer": opt_domain, "lr_scheduler": sch_domain},
         ]
+        # return (
+        #     [opt_task, opt_domain],
+        #     [
+        #         {"scheduler": sch_task, "interval": "step", "name": "lr_task"},
+        #         {"scheduler": sch_domain, "interval": "step", "name": "lr_domain"},
+        #     ]
+        # )
     
     def update_grl_lambda(self):
         """Update GRL lambda based on training progress"""
@@ -152,6 +159,7 @@ class RomeDANN(AlgorithmBase):
         
         # Grab optimizers for manual optimization
         opt_task, opt_domain = self.optimizers()
+        sched_task, sched_domain = self.lr_schedulers()
         
         source_batch, target_batch = batch
         
@@ -205,7 +213,11 @@ class RomeDANN(AlgorithmBase):
         opt_task.step()
         opt_domain.step()
         
-        # ===== TOTAL LOSS (for logging/return only) =====
+        # Update schedulers
+        sched_task.step()
+        sched_domain.step()
+        
+        # # ===== TOTAL LOSS (for logging/return only) =====
         total_loss = task_loss + domain_loss
         
         # ===== METRICS =====
