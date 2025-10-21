@@ -8,6 +8,7 @@ use_dice: False
 # DANN-specific: global weight for domain adversarial loss
 # The actual lambda is scheduled from ~0 to domain_loss_weight during training
 domain_loss_weight: 1.0
+supervised: False
 
 compiled:
   _target_: src.utils.CompileParams

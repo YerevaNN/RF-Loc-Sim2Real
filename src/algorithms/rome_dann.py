@@ -46,6 +46,7 @@ class RomeDANN(AlgorithmBase):
         network: nn.Module = None,
         network_conf: DictConfig = None,
         gpu: int = None,
+        supervised: bool = False,
         *args, **kwargs
     ):
         super().__init__(
@@ -65,6 +66,7 @@ class RomeDANN(AlgorithmBase):
         self.mse = nn.MSELoss(reduction='none')
         self.error_tolerance = error_tolerance
         self.domain_loss_weight = domain_loss_weight
+        self.supervised = supervised
     
     # ----- Dual optimizers (task vs domain) -----
     def configure_optimizers(self):
@@ -184,18 +186,19 @@ class RomeDANN(AlgorithmBase):
             target_input_image, target_sequence
         )
         
-        # ===== TASK LOSS (only on labeled source data) =====
+        # ===== TASK LOSS (only on source data) =====
         task_metrics = self.get_task_metrics(
             source_task_logits, source_supervision_image,
             source_image_size, source_ue_loc_y_x
         )
         task_loss = task_metrics['loss']
         
-        # ===== TARGET TASK LOSS (only on labeled target data) =====
+        # ===== TARGET TASK LOSS (only on target data) =====
         target_task_metrics = self.get_task_metrics(
             target_task_logits, target_supervision_image,
             target_image_size, target_ue_loc_y_x
         )
+        target_task_loss = target_task_metrics['loss']
         
         # ===== DOMAIN LOSS (on both source and target) =====
         # Domain labels: 0 for source, 1 for target
@@ -213,6 +216,8 @@ class RomeDANN(AlgorithmBase):
         
         # Backprop task first (retain graph for domain), GRL flips gradients w.r.t. features
         self.manual_backward(task_loss, retain_graph=True)
+        if self.supervised:
+            self.manual_backward(target_task_loss, retain_graph=True)
         self.manual_backward(domain_loss)
         
         # Optional grad clipping could be added here
@@ -234,11 +239,12 @@ class RomeDANN(AlgorithmBase):
         metrics = {
             # "loss": total_loss,  # Main loss for optimization
             "loss": task_loss.detach(),
+            "target_loss": target_task_loss.detach(),
             "domain_loss": domain_loss.detach(),
             "domain_acc": domain_acc.detach(),
             "grl_lambda": lambd,
             **{f"{k}": v for k, v in task_metrics.items() if k != 'loss'},
-            **{f"target_{k}": v for k, v in target_task_metrics.items()}
+            **{f"target_{k}": v for k, v in target_task_metrics.items() if k != 'loss'}
         }
         
         return metrics
