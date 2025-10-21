@@ -47,6 +47,7 @@ class RomeDANN(AlgorithmBase):
         network_conf: DictConfig = None,
         gpu: int = None,
         supervised: bool = False,
+        pretrained_backbone_path: Optional[str] = None,
         *args, **kwargs
     ):
         super().__init__(
@@ -67,6 +68,61 @@ class RomeDANN(AlgorithmBase):
         self.error_tolerance = error_tolerance
         self.domain_loss_weight = domain_loss_weight
         self.supervised = supervised
+        
+        # Initialize backbone from pretrained checkpoint if provided
+        if pretrained_backbone_path is not None:
+            self._load_pretrained_backbone(pretrained_backbone_path)
+    
+    def _load_pretrained_backbone(self, checkpoint_path: str):
+        """
+        Load pretrained backbone weights from a checkpoint, excluding the domain discriminator head.
+        
+        Args:
+            checkpoint_path: Path to the checkpoint file containing pretrained weights.
+                            Can be either a Lightning checkpoint (.ckpt) or a raw state dict (.pth).
+        """
+        log.info(f"Loading pretrained backbone from: {checkpoint_path}")
+        
+        # Load checkpoint
+        checkpoint = torch.load(checkpoint_path, map_location='cpu')
+        
+        # Extract state dict (handle both Lightning checkpoints and raw state dicts)
+        if 'state_dict' in checkpoint:
+            state_dict = checkpoint['state_dict']
+        else:
+            state_dict = checkpoint
+        
+        # Filter to get only backbone weights
+        # Lightning saves module parameters with 'network_field.' prefix, so we need to handle that
+        backbone_state_dict = {}
+        for key, value in state_dict.items():
+            # Remove 'network_field.' prefix if present
+            clean_key = key.replace('network_field.', '')
+            
+            # Only load backbone weights (exclude domain_head)
+            if clean_key.startswith('backbone.') or (not clean_key.startswith('domain_head.') and not clean_key.startswith('grl.')):
+                # If the key already has 'backbone.' prefix, use it as is
+                # Otherwise, assume it's a direct backbone weight
+                if clean_key.startswith('backbone.'):
+                    backbone_state_dict[clean_key] = value
+                else:
+                    # This handles cases where checkpoint might be from non-DANN model
+                    # Try to match it to backbone submodules
+                    backbone_state_dict[f'backbone.{clean_key}'] = value
+        
+        # Load weights into the network's backbone
+        if hasattr(self.network_field, 'backbone'):
+            # DANN network with separate backbone
+            missing_keys, unexpected_keys = self.network_field.load_state_dict(
+                backbone_state_dict, strict=False
+            )
+            log.info(f"Loaded pretrained backbone weights (excluding domain head)")
+            if missing_keys:
+                log.warning(f"Missing keys in backbone: {missing_keys}")
+            if unexpected_keys:
+                log.warning(f"Unexpected keys in checkpoint: {unexpected_keys}")
+        else:
+            log.warning("Network does not have a 'backbone' attribute. Skipping pretrained loading.")
     
     # ----- Dual optimizers (task vs domain) -----
     def configure_optimizers(self):
