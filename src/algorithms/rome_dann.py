@@ -1,6 +1,6 @@
 import logging
 import math
-from typing import Any
+from typing import Any, Optional
 
 import torch
 import torch.nn as nn
@@ -191,6 +191,12 @@ class RomeDANN(AlgorithmBase):
         )
         task_loss = task_metrics['loss']
         
+        # ===== TARGET TASK LOSS (only on labeled target data) =====
+        target_task_metrics = self.get_task_metrics(
+            target_task_logits, target_supervision_image,
+            target_image_size, target_ue_loc_y_x
+        )
+        
         # ===== DOMAIN LOSS (on both source and target) =====
         # Domain labels: 0 for source, 1 for target
         source_domain_labels = torch.zeros(source_domain_logits.size(0), device=source_domain_logits.device)
@@ -218,7 +224,7 @@ class RomeDANN(AlgorithmBase):
         sched_domain.step()
         
         # # ===== TOTAL LOSS (for logging/return only) =====
-        total_loss = task_loss + domain_loss
+        # total_loss = task_loss + domain_loss
         
         # ===== METRICS =====
         # Domain classification accuracy (for monitoring)
@@ -226,12 +232,13 @@ class RomeDANN(AlgorithmBase):
         domain_acc = (domain_preds == domain_labels).float().mean()
         
         metrics = {
-            "loss": total_loss,  # Main loss for optimization
-            "task_loss": task_loss.detach(),
+            # "loss": total_loss,  # Main loss for optimization
+            "loss": task_loss.detach(),
             "domain_loss": domain_loss.detach(),
             "domain_acc": domain_acc.detach(),
             "grl_lambda": lambd,
-            **{f"{k}": v for k, v in task_metrics.items() if k != 'loss'}
+            **{f"{k}": v for k, v in task_metrics.items() if k != 'loss'},
+            **{f"target_{k}": v for k, v in target_task_metrics.items()}
         }
         
         return metrics
@@ -314,4 +321,30 @@ class RomeDANN(AlgorithmBase):
             original_ue_lon=original_lon,
             ue_loc_y_x=ue_loc_y_x
         )
+        
+    # Override on_validation_epoch_end
+    def on_validation_epoch_end(self) -> None:
+        names = getattr(self.trainer.datamodule, 'val_dataloader_names', None)
+        for validation_num in self.validation_step_outputs:
+            outputs = self.validation_step_outputs[validation_num]
+            if names and validation_num < len(names):
+                split_name = f"val_{names[validation_num]}"
+            else:
+                split_name = f"val_{validation_num}"
+            self.epoch_end(outputs, split_name=split_name)
+        
+        self.validation_step_outputs.clear()
+    
+    # Override on_test_epoch_end
+    def on_test_epoch_end(self) -> None:
+        names = getattr(self.trainer.datamodule, 'test_dataloader_names', None)
+        for test_num in self.test_step_outputs:
+            outputs = self.test_step_outputs[test_num]
+            if names and test_num < len(names):
+                split_name = f"test_{names[test_num]}"
+            else:
+                split_name = f"test_{test_num}"
+            self.epoch_end(outputs, split_name=split_name)
+        
+        self.test_step_outputs.clear()
 

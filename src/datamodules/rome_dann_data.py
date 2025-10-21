@@ -1,4 +1,5 @@
 from typing import Union
+import random
 
 import numpy as np
 import torch
@@ -18,14 +19,17 @@ class PairedDataset(Dataset):
     def __init__(self, source_dataset: RomeDataset, target_dataset: RomeDataset):
         self.source = source_dataset
         self.target = target_dataset
-        self.length = min(len(source_dataset), len(target_dataset))
+        self.length = min(len(source_dataset), max(len(source_dataset), len(target_dataset)))
+        self.target_length = len(target_dataset)
     
     def __len__(self):
         return self.length
     
     def __getitem__(self, idx):
         # Return tuple of (source_item, target_item)
-        return self.source[idx], self.target[idx]
+        # For each source item, sample a random target item
+        target_idx = random.randint(0, self.target_length - 1)
+        return self.source[idx], self.target[target_idx]
 
 
 class RomeDANNDatamodule(DatamoduleBase):
@@ -557,3 +561,16 @@ class RomeDANNDatamodule(DatamoduleBase):
             self.target_hard_val_set_field, self.target_medium_val_set_field, self.target_easy_val_set_field
         )
 
+    @property
+    def val_dataloader_names(self):
+        return [
+            '0', '1', '2',
+            '0_target', '1_target', '2_target'
+        ]
+    
+    @property
+    def test_dataloader_names(self):
+        return [
+            '0', '1', '2',
+            '0_target', '1_target', '2_target'
+        ]
