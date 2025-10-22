@@ -1,0 +1,28 @@
+# @package _global_
+name: dann_inference
+seed: 0
+print_config: True
+ignore_warnings: True
+
+
+checkpoint_path: ${oc.env:OUTPUT_DIR}/2025-02-06_09-31-33.881257/checkpoints/hard/epoch_0131.ckpt
+gpu: 1
+split: test
+prediction_dir: ${oc.env:PREDICTIONS_PATH}/${split}
+domain: target  # Options: "source" or "target"
+rome_idx: [ 0, 1, 2 ]  # Always use [0,1,2] for hard, medium, easy
+
+defaults:
+  - datamodule: rome_dann_data
+  - algorithm: rome_dann
+  - network: vit_pp_dann
+  - _self_
+
+
+hydra:
+  run:
+    dir: ${oc.env:OUTPUT_DIR}/${now:%Y-%m-%d_%H-%M-%S}
+  job:
+    chdir: True
+
+

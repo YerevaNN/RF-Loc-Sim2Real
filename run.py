@@ -58,6 +58,10 @@ def main(config: DictConfig) -> None:
     if config["name"] == "inference":
         return pred(config)
     
+    if config["name"] == "dann_inference":
+        from src.inference_dann import pred as pred_dann
+        return pred_dann(config)
+    
     if config["name"] == "evaluation":
         return evaluate(config)
     
