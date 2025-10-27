@@ -6,11 +6,12 @@ ignore_warnings: True
 
 out_dir: ${oc.env:OSLO_OUT_DIR}
 
-train_only: True
-hard_test_campaign: "4"
+train_only: False
+
+hard_test_nsew: [ 59.927, 59.9217, 10.765, 10.7545 ]
 hard_train: 0.0
 hard_test: 1.0
-hard_val_nsew: [ 59.9235, 59.9225, 10.742, 10.740 ]
+hard_val_nsew: [ 59.929, 59.927, 10.765, 10.7545 ]
 medium_train: 0.95
 medium_test: 0.5
 easy_train: 0.99
