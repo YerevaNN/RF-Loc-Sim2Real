@@ -11,6 +11,7 @@ log = logging.getLogger(__name__)
 
 def evaluate(config: DictConfig) -> None:
     is_rome = config["is_rome"]
+    size_bins = config["size_bins"]
     
     if is_rome:
         indices = sorted(os.listdir(config["prediction_path"]), key=int)
@@ -32,3 +33,11 @@ def evaluate(config: DictConfig) -> None:
                 headers=[f"{t}m acc" for t in config["error_tolerance"]]
             )
         )
+        # Per-size bin RMSEs based on original_img_size
+        bin_rows = evaluator.get_bin_rmse(size_bins=size_bins)
+        bin_headers = [
+            "size_range",
+            "count",
+            "rmse",
+        ]
+        log.info("\n" + tabulate(bin_rows, headers=bin_headers))
