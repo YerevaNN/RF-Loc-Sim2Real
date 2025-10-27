@@ -4,7 +4,7 @@ warmup_epochs: 10
 decay_epochs: 10
 max_epochs: ${trainer.max_epochs}
 warmup_start_lr: 0
-stable_lr: 1.5e-4
+stable_lr: 2e-4
 eta_min: 0.0
 last_epoch: -1
 interval: 'epoch' # 'step' or 'epoch'
