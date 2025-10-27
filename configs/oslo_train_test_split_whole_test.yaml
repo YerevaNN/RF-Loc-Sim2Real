@@ -1,0 +1,26 @@
+# @package _global_
+name: oslo_train_test_split
+seed: 0
+print_config: True
+ignore_warnings: True
+
+out_dir: ${oc.env:OSLO_OUT_DIR}
+
+train_only: False
+
+hard_test_nsew: [ 59.927, 59.9217, 10.765, 10.77 ]
+hard_train: 0.0
+hard_test: 1.0
+hard_val_nsew: [ 59.929, 59.927, 10.765, 10.77 ]
+medium_train: 1.0
+medium_test: 0.5
+easy_train: 0.999
+easy_test: 0.5
+
+hard_margin_meters: 601
+
+hydra:
+  run:
+    dir: ${oc.env:OUTPUT_DIR}/${now:%Y-%m-%d_%H-%M-%S}
+  job:
+    chdir: True

@@ -1,0 +1,14 @@
+# @package _global_
+name: rome_create_info_json
+seed: 0
+print_config: True
+ignore_warnings: True
+
+main_path: ${oc.env:ROME_VAR_OUT_DIR}
+dataset_type: dataSet #  dataSet_interp
+
+hydra:
+  run:
+    dir: ${oc.env:OUTPUT_DIR}/${now:%Y-%m-%d_%H-%M-%S}
+  job:
+    chdir: True
