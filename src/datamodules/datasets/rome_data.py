@@ -35,6 +35,7 @@ class RomeDataset(Dataset):
         for_viz: bool,
         map_channels: str,
         crops_per_epoch: int,
+        bs_power_dropout_rate: float = 0.0,
         *args, **kwargs
     ):
         super().__init__()
@@ -62,6 +63,7 @@ class RomeDataset(Dataset):
         self.for_viz = for_viz
         self.map_channels = map_channels
         self.crop_per_epoch = crops_per_epoch
+        self.bs_power_dropout_rate = bs_power_dropout_rate
     
     def __getitem__(
         self, idx: int
@@ -120,6 +122,10 @@ class RomeDataset(Dataset):
                         (bs["measurements"][feature] - self.feature_means[feature]) / self.feature_vars[feature]
                         for feature in self.features
                     ]
+                    if "bs_power_dbm" in self.features:
+                        power_idx = self.features.index("bs_power_dbm")
+                        if random.random() < self.bs_power_dropout_rate:
+                            bs_ue_data_values[power_idx] = 0.0
                     bs_info_slice = (
                         slice(max(0, int(bs_loc_y_x[0]) - self.eps_image), int(bs_loc_y_x[0]) + self.eps_image),
                         slice(max(0, int(bs_loc_y_x[1]) - self.eps_image), int(bs_loc_y_x[1]) + self.eps_image)

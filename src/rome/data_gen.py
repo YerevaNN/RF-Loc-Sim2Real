@@ -58,6 +58,7 @@ class DataGen:
                     "sim_nsinr": "NSINR",
                     "sim_nrsrp": "NRSRP",
                     "sim_nrsrq": "NRSRQ",
+                    "bs_power_dbm": "bs_power_dbm",
                 },
                 inplace=True
             )
@@ -277,7 +278,10 @@ class DataGen:
                 cell_point, crs="epsg:4326", to_crs=custom_crs
             )[0]
             
-            measurements = cell[["RSSI", "NSINR", "NRSRP", "NRSRQ", "ToA"]].to_dict()
+            measurement_columns = ["RSSI", "NSINR", "NRSRP", "NRSRQ", "ToA"]
+            if "bs_power_dbm" in cells_df.columns:
+                measurement_columns.append("bs_power_dbm")
+            measurements = cell[measurement_columns].to_dict()
             interpolated_flag = cell["interpolated"]
             proj_y = float(half_square_size - cell_projected.y)
             proj_x = float(half_square_size + cell_projected.x)
@@ -347,6 +351,8 @@ class DataGen:
             ]
             other_columns = []
         measurement_columns = ["RSSI", "NSINR", "NRSRP", "NRSRQ", "ToA"]
+        if "bs_power_dbm" in corresponding_cells.columns:
+            measurement_columns.append("bs_power_dbm")
         unique_cells = corresponding_cells[id_columns + measurement_columns + other_columns].drop_duplicates(id_columns)
         
         custom_crs = DataGen.create_custom_tm_crs(center_lat, center_lon)
@@ -422,6 +428,8 @@ class DataGen:
                 ]
                 other_columns = []
             measurement_columns = ["RSSI", "NSINR", "NRSRP", "NRSRQ", "ToA"]
+            if "bs_power_dbm" in corresponding_cells.columns:
+                measurement_columns.append("bs_power_dbm")
             unique_cells = corresponding_cells[id_columns + measurement_columns + other_columns].drop_duplicates(
                 id_columns
             )
