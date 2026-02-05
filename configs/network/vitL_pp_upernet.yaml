@@ -3,7 +3,7 @@ _target_: src.networks.ViTPlusPlusUPerNet
 num_classes: 1
 image_size: 224
 
-mlp_input_dim: 6
+mlp_input_dim: 7
 
 v_num_channels: 3
 v_patch_size: 14

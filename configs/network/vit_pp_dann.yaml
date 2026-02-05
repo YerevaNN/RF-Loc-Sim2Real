@@ -5,7 +5,7 @@ num_classes: 1
 image_size: 224
 
 # Sequence embedding
-mlp_input_dim: 6
+mlp_input_dim: 7
 
 # ViT backbone (base)
 v_num_channels: 3

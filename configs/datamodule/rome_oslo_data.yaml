@@ -39,16 +39,20 @@ features:
   - NSINR
   - NRSRP
   - NRSRQ
+  - bs_power_dbm
 feature_means:
   RSSI: -64
   NSINR: -5.0
   NRSRP: -83.0
   NRSRQ: -19.0
+  bs_power_dbm: 0.0
 feature_vars:
   RSSI: 57.0
   NSINR: 94.0
   NRSRP: 114.0
   NRSRQ: 41.0
+  bs_power_dbm: 1.0
+bs_power_dropout_rate: 0.0
 output_gaussian_sigma: 3.0
 decimal_places: 10
 eps_image: 3
