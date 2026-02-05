@@ -5,6 +5,7 @@ import os
 from collections import defaultdict
 from copy import deepcopy
 
+from geopy.distance import distance
 from omegaconf import DictConfig
 from sklearn.model_selection import train_test_split
 
@@ -16,6 +17,7 @@ class DataSplit:
     def __init__(
         self,
         json_path: str,
+        data_out_dir: str,
         train_only: bool,
         hard_test_nsew: str,
         hard_train: float,
@@ -26,6 +28,8 @@ class DataSplit:
         easy_test: float,
         hard_val_nsew: list,
         hard_margin_meters: float,
+        drop_overlapping_bboxes: bool,
+        overlap_precheck_half_square_size_meters: float,
         random_state: int = 42,
     ):
         with open(json_path, "r") as file:
@@ -39,6 +43,7 @@ class DataSplit:
             # Now this info_json is either info_dataSet or info_dataSet_interp with corresponding infos stored for interpolated and non-interpolated data
             self.info_json: dict[str, dict[str, dict[str, int]]] = json.load(file)
         
+        self.data_out_dir = data_out_dir
         self.train_only = train_only
         self.hard_train = hard_train
         self.hard_test = hard_test
@@ -51,6 +56,8 @@ class DataSplit:
         self.hard_val_nsew = hard_val_nsew
         self.hard_margin_meters = hard_margin_meters
         
+        self.drop_overlapping_bboxes = drop_overlapping_bboxes
+        self.overlap_precheck_buffer_meters = 2 * overlap_precheck_half_square_size_meters * math.sqrt(2)
         self.random_state = random_state
     
     def split_dict(self, data: dict, test_size: float = 0.3):
@@ -109,6 +116,105 @@ class DataSplit:
         west_margined = west + margin_degrees_lon
         
         return [north_margined, south_margined, east_margined, west_margined]
+
+    @staticmethod
+    def expand_nsew_by_meters(nsew, buffer_meters):
+        north, south, east, west = nsew
+        lat_center = (north + south) / 2
+        meters_per_degree_lat = 111000
+        meters_per_degree_lon = 111000 * math.cos(math.radians(lat_center))
+
+        buffer_degrees_lat = buffer_meters / meters_per_degree_lat
+        buffer_degrees_lon = buffer_meters / meters_per_degree_lon
+
+        return [
+            north + buffer_degrees_lat,
+            south - buffer_degrees_lat,
+            east + buffer_degrees_lon,
+            west - buffer_degrees_lon,
+        ]
+
+    @staticmethod
+    def point_in_nsew(lat, lon, nsew):
+        north, south, east, west = nsew
+        return south <= lat <= north and west <= lon <= east
+
+    @staticmethod
+    def bboxes_intersect(a_nsew, b_nsew) -> bool:
+        a_north, a_south, a_east, a_west = a_nsew
+        b_north, b_south, b_east, b_west = b_nsew
+        return not (
+            a_south > b_north
+            or a_north < b_south
+            or a_west > b_east
+            or a_east < b_west
+        )
+
+    @staticmethod
+    def parse_pid_lat_lon(pid: str):
+        lat_str, lon_str = pid.split('_')
+        lat_str = lat_str.replace('p', '.')
+        lon_str = lon_str.replace('p', '.')
+        return float(lat_str), float(lon_str)
+
+    @staticmethod
+    def crop_bbox_from_json(crop_json_path: str):
+        with open(crop_json_path, "r") as file:
+            crop_info = json.load(file)
+        center_lat, center_lon = crop_info["center_coord"]
+        half_square_size_meters = crop_info["half_square_size_meters"]
+        north_point = distance(meters=float(half_square_size_meters)).destination((center_lat, center_lon), bearing=0)
+        south_point = distance(meters=float(half_square_size_meters)).destination((center_lat, center_lon), bearing=180)
+        east_point = distance(meters=float(half_square_size_meters)).destination((center_lat, center_lon), bearing=90)
+        west_point = distance(meters=float(half_square_size_meters)).destination((center_lat, center_lon), bearing=270)
+        return [float(north_point[0]), float(south_point[0]), float(east_point[1]), float(west_point[1])]
+
+    def drop_train_overlaps(self, train_info: dict) -> dict:
+        if not self.drop_overlapping_bboxes:
+            return train_info
+
+        expanded_test = self.expand_nsew_by_meters(self.hard_test_nsew, self.overlap_precheck_buffer_meters)
+        expanded_val = self.expand_nsew_by_meters(self.hard_val_nsew, self.overlap_precheck_buffer_meters)
+
+        removed_crops = 0
+        removed_ues = 0
+
+        for cid in list(train_info.keys()):
+            for pid in list(train_info[cid].keys()):
+                try:
+                    lat, lon = self.parse_pid_lat_lon(pid)
+                except ValueError:
+                    log.info(f"Invalid lat/lon format in pid: {pid}. Skipping.")
+                    continue
+
+                if not (
+                    self.point_in_nsew(lat, lon, expanded_test)
+                    or self.point_in_nsew(lat, lon, expanded_val)
+                ):
+                    continue
+
+                for crop_id in list(train_info[cid][pid].keys()):
+                    crop_json_path = os.path.join(self.data_out_dir, str(cid), pid, f"{crop_id}.json")
+                    if not os.path.exists(crop_json_path):
+                        log.info(f"Missing crop json: {crop_json_path}. Skipping overlap check.")
+                        continue
+                    crop_nsew = self.crop_bbox_from_json(crop_json_path)
+                    if self.bboxes_intersect(crop_nsew, self.hard_test_nsew) or self.bboxes_intersect(
+                        crop_nsew, self.hard_val_nsew
+                    ):
+                        del train_info[cid][pid][crop_id]
+                        removed_crops += 1
+
+                if not train_info[cid][pid]:
+                    del train_info[cid][pid]
+                    removed_ues += 1
+
+            if cid in train_info and not train_info[cid]:
+                del train_info[cid]
+
+        log.info(f"Removed {removed_crops} overlapping crops from train.json.")
+        log.info(f"Removed {removed_ues} UEs with no remaining crops from train.json.")
+        return train_info
     
     # def split_hard_test(self) -> tuple[dict, dict]:
     #     campaign_info = self.info_json[self.hard_test_nsew]
@@ -200,6 +306,8 @@ class DataSplit:
             train_info, hard_val_info = self.split_hard(train_info, self.hard_val_nsew)
             train_info, medium_test_info, medium_val_info = self.split_medium_test(train_info)
             train_info, easy_test_info, easy_val_info = self.split_easy_test(train_info)
+
+        train_info = self.drop_train_overlaps(train_info)
         
         with open(os.path.join(out_dir, "train.json"), "w") as file:
             json.dump(train_info, file, indent=4)
@@ -232,6 +340,7 @@ class DataSplit:
 def train_test_val(config: DictConfig) -> None:
     train_test_splitter = DataSplit(
         json_path=os.path.join(config["out_dir"], f"info_{config.get('dataset_type', 'dataSet')}.json"),
+        data_out_dir=config["out_dir"],
         train_only=config["train_only"],
         hard_test_nsew=config["hard_test_nsew"],
         hard_train=config["hard_train"],
@@ -242,6 +351,8 @@ def train_test_val(config: DictConfig) -> None:
         easy_test=config["easy_test"],
         hard_val_nsew=config["hard_val_nsew"],
         hard_margin_meters=config["hard_margin_meters"],
+        drop_overlapping_bboxes=config.get("drop_overlapping_bboxes", True),
+        overlap_precheck_half_square_size_meters=config.get("overlap_precheck_half_square_size_meters", 0),
         random_state=config["seed"],
     )
     
