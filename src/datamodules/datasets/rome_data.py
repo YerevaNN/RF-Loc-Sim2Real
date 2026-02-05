@@ -119,14 +119,14 @@ class RomeDataset(Dataset):
                     bs_loc_y_x: np.ndarray = bs_orig_loc_y_x / orig_image_size * self.map_size
                     
                     bs_measurements = bs["measurements"]
-                    bs_ue_data_values = [
-                        (bs_measurements.get(feature, 0.0) - self.feature_means[feature]) / self.feature_vars[feature]
-                        for feature in self.features
-                    ]
-                    if "bs_power_dbm" in self.features:
-                        power_idx = self.features.index("bs_power_dbm")
-                        if random.random() < self.bs_power_dropout_rate:
-                            bs_ue_data_values[power_idx] = 0.0
+                    bs_ue_data_values = []
+                    for feature in self.features:
+                        raw_value = bs_measurements.get(feature, 0.0)
+                        if feature == "bs_power_dbm" and random.random() < self.bs_power_dropout_rate:
+                            raw_value = 0.0
+                        bs_ue_data_values.append(
+                            (raw_value - self.feature_means[feature]) / self.feature_vars[feature]
+                        )
                     bs_info_slice = (
                         slice(max(0, int(bs_loc_y_x[0]) - self.eps_image), int(bs_loc_y_x[0]) + self.eps_image),
                         slice(max(0, int(bs_loc_y_x[1]) - self.eps_image), int(bs_loc_y_x[1]) + self.eps_image)
