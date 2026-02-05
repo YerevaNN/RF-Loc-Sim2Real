@@ -50,6 +50,8 @@ class DataGen:
             self.simulated = True
             
             self.info_df = pd.read_csv(sionna_csv)
+            if "bs_power_dbm" not in self.info_df.columns:
+                self.info_df["bs_power_dbm"] = 0.0
             self.info_df.rename(
                 columns={
                     "ue_lat": "latitude",

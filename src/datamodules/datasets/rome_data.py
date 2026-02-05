@@ -118,8 +118,9 @@ class RomeDataset(Dataset):
                     bs_orig_loc_y_x = np.array(bs["proj_map_pos"])
                     bs_loc_y_x: np.ndarray = bs_orig_loc_y_x / orig_image_size * self.map_size
                     
+                    bs_measurements = bs["measurements"]
                     bs_ue_data_values = [
-                        (bs["measurements"][feature] - self.feature_means[feature]) / self.feature_vars[feature]
+                        (bs_measurements.get(feature, 0.0) - self.feature_means[feature]) / self.feature_vars[feature]
                         for feature in self.features
                     ]
                     if "bs_power_dbm" in self.features:
