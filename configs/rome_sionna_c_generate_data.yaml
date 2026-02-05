@@ -8,6 +8,8 @@ mat_file: null
 cell_file: null
 sionna_csv: ${oc.env:ROME_SIONNA_C_CSV}
 out_dir: ${oc.env:ROME_SIONNA_OUT_DIR_C}
+buildings_gpkg_path: ${oc.env:CACHE_DIR}/buildings.gpkg
+roads_gpkg_path: ${oc.env:CACHE_DIR}/roads.gpkg
 random_point_scale_factor: 0.9
 nsew: [ 41.90, 41.80, 12.56, 12.45 ]
 workers: null

@@ -9,6 +9,8 @@ cell_file: ${oc.env:OSLO_CELL_FILE}
 sionna_csv: null
 out_dir: ${oc.env:OSLO_OUT_DIR}
 mat_keyword: dataSet
+buildings_gpkg_path: ${oc.env:CACHE_DIR}/buildings.gpkg
+roads_gpkg_path: ${oc.env:CACHE_DIR}/roads.gpkg
 random_point_scale_factor: 0.9
 nsew: [ 59.94, 59.90, 10.71, 10.77 ]
 workers: null

@@ -37,6 +37,8 @@ class DataGen:
         cell_file: str,
         sionna_csv: str,
         out_dir: str,
+        buildings_gpkg_path: str,
+        roads_gpkg_path: str,
         random_point_scale_factor: float,
         nsew: list[float],
         workers: list[int]
@@ -83,20 +85,48 @@ class DataGen:
         self.ue_positions = np.unique(self.info_df[["latitude", "longitude"]].values, axis=0)
         self.out_dir = out_dir
         north, south, east, west = nsew
-        log.info("Getting all the buildings")
-        with tqdm(total=1, desc="Loading buildings") as pbar:
-            self.buildings = ox.features_from_bbox(bbox=(north, south, east, west), tags={"building": True})
-            pbar.update(1)
-        
-        log.info("Getting all the roads")
-        # noinspection PyPep8Naming
-        with tqdm(total=1, desc="Loading roads") as pbar:
-            G = ox.graph_from_bbox(
-                bbox=(north, south, east, west), network_type="drive", retain_all=True, simplify=False
-            )
-            pbar.update(1)
-        
-        self.roads = ox.graph_to_gdfs(G, nodes=False)
+        buildings_cached = buildings_gpkg_path and os.path.exists(buildings_gpkg_path)
+        roads_cached = roads_gpkg_path and os.path.exists(roads_gpkg_path)
+        if buildings_cached and roads_cached:
+            log.info("Loading buildings from disk: %s", buildings_gpkg_path)
+            self.buildings = geopandas.read_file(buildings_gpkg_path)
+            log.info("Loading roads from disk: %s", roads_gpkg_path)
+            self.roads = geopandas.read_file(roads_gpkg_path)
+        else:
+            if buildings_gpkg_path or roads_gpkg_path:
+                log.info(
+                    "Cached files not found, downloading from OSM. "
+                    "buildings_cached=%s roads_cached=%s",
+                    buildings_cached,
+                    roads_cached
+                )
+            log.info("Getting all the buildings")
+            with tqdm(total=1, desc="Loading buildings") as pbar:
+                self.buildings = ox.features_from_bbox(bbox=(north, south, east, west), tags={"building": True})
+                pbar.update(1)
+
+            log.info("Getting all the roads")
+            # noinspection PyPep8Naming
+            with tqdm(total=1, desc="Loading roads") as pbar:
+                G = ox.graph_from_bbox(
+                    bbox=(north, south, east, west), network_type="drive", retain_all=True, simplify=False
+                )
+                pbar.update(1)
+
+            self.roads = ox.graph_to_gdfs(G, nodes=False)
+
+            if buildings_gpkg_path:
+                buildings_dir = os.path.dirname(buildings_gpkg_path)
+                if buildings_dir:
+                    os.makedirs(buildings_dir, exist_ok=True)
+                self.buildings.to_file(buildings_gpkg_path, driver="GPKG")
+                log.info("Saved buildings to disk: %s", buildings_gpkg_path)
+            if roads_gpkg_path:
+                roads_dir = os.path.dirname(roads_gpkg_path)
+                if roads_dir:
+                    os.makedirs(roads_dir, exist_ok=True)
+                self.roads.to_file(roads_gpkg_path, driver="GPKG")
+                log.info("Saved roads to disk: %s", roads_gpkg_path)
         self.workers = workers
         
         total_campaigns = len(self.info_df["campaignID"].unique())
@@ -496,6 +526,8 @@ def generate_data(config: DictConfig) -> None:
         cell_file=config["cell_file"],
         sionna_csv=config["sionna_csv"],
         out_dir=config["out_dir"],
+        buildings_gpkg_path=config.get("buildings_gpkg_path"),
+        roads_gpkg_path=config.get("roads_gpkg_path"),
         random_point_scale_factor=config["random_point_scale_factor"],
         nsew=config["nsew"],
         workers=workers
