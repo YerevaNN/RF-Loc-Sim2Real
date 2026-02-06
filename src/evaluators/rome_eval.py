@@ -37,16 +37,16 @@ class RomeEvaluation:
             
             scale = image_size / out_img.shape[0]
             max_ind = out_img.flatten().argmax()
-            # ue_location_pred = np.array([max_ind // max(out_img.shape), max_ind % max(out_img.shape)])
-            ue_location_pred = np.array([111.5, 111.5])
+            ue_location_pred = np.array([max_ind // max(out_img.shape), max_ind % max(out_img.shape)])
+            # ue_location_pred = np.array([111.5, 111.5])
             rmse = float(((ue_location_pred - ue_loc_y_x) ** 2).sum() ** 0.5) * scale
             rmses.append(rmse)
             sizes.append(image_size)
         
         self.calculated_rmses = np.array(rmses)
         self.calculated_sizes = np.array(sizes)
-        print(self.calculated_rmses.tolist())
-        print(self.calculated_sizes.tolist())
+        # print(self.calculated_rmses.tolist())
+        # print(self.calculated_sizes.tolist())
     
     def get_rmses(self) -> np.ndarray:
         return self.rmses
