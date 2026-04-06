@@ -16,13 +16,15 @@ log = logging.getLogger(__name__)
 
 
 class RomeTransformerUnet(AlgorithmBase):
-    
+
     def __init__(
         self,
         compiled: CompileParams,
         use_ce: bool,
         use_dice: bool,
         error_tolerance: list,
+        use_soft_argmax: bool = False,
+        coord_loss_weight: float = 1.0,
         optimizer_conf: DictConfig = None,
         scheduler_conf: DictConfig = None,
         network: nn.Module = None,
@@ -38,10 +40,12 @@ class RomeTransformerUnet(AlgorithmBase):
             network_conf=network_conf,
             gpu=gpu
         )
-        
+
         assert use_ce or use_dice, "Loss function is not specified."
         self.use_ce = use_ce
         self.use_dice = use_dice
+        self.use_soft_argmax = use_soft_argmax
+        self.coord_loss_weight = coord_loss_weight
         self.mse = nn.MSELoss(reduction='none')
         self.error_tolerance = error_tolerance
     
@@ -72,37 +76,61 @@ class RomeTransformerUnet(AlgorithmBase):
         pred_image = self.network_field(input_image, sequence)
         return self.get_metrics(pred_image, supervision_image, image_size, ue_loc_y_x)
     
+    @staticmethod
+    def _soft_argmax(logits):
+        """Differentiable soft-argmax: spatial expectation of softmax probabilities."""
+        B, _, H, W = logits.shape
+        probs = torch.softmax(logits.view(B, -1), dim=-1).view(B, 1, H, W)
+
+        device = logits.device
+        coords_y = torch.arange(H, device=device, dtype=logits.dtype)
+        coords_x = torch.arange(W, device=device, dtype=logits.dtype)
+        grid_y, grid_x = torch.meshgrid(coords_y, coords_x, indexing='ij')
+
+        pred_y = (probs[:, 0] * grid_y).sum(dim=(1, 2))
+        pred_x = (probs[:, 0] * grid_x).sum(dim=(1, 2))
+        return torch.stack([pred_y, pred_x], dim=1)
+
     def get_metrics(
         self, pred_image: torch.Tensor, supervision_image: torch.Tensor, image_size: torch.Tensor,
         ue_loc_y_x: torch.Tensor
     ):
-        max_ind_pred = pred_image.flatten(1).argmax(dim=-1)
-        ue_location_pred_y_x = torch.stack(
-            [max_ind_pred // max(pred_image[0][0].shape), max_ind_pred % max(pred_image[0][0].shape)], dim=1
-        )  # .cuda()
-        
+        H, W = pred_image.shape[-2], pred_image.shape[-1]
+
+        if self.use_soft_argmax:
+            ue_location_pred_y_x = self._soft_argmax(pred_image)
+        else:
+            max_ind_pred = pred_image.flatten(1).argmax(dim=-1)
+            ue_location_pred_y_x = torch.stack(
+                [max_ind_pred // W, max_ind_pred % W], dim=1
+            )
+
         mses_meters = self.mse(
             ue_location_pred_y_x.to(torch.float32), ue_loc_y_x.to(torch.float32)
-        ).sum(dim=1).sqrt() * image_size / max(pred_image[0][0].shape)
-        
+        ).sum(dim=1).sqrt() * image_size / max(H, W)
+
         # noinspection PyUnresolvedReferences
         accuracies = {f"acc_{p}": (mses_meters < p).sum() / len(mses_meters) for p in self.error_tolerance}
         mse_meters = mses_meters.mean()
-        
+
         pred_image_sigmoid = torch.sigmoid(pred_image)
-        
+
         loss = 0
         if self.use_ce:
             loss += nn.functional.binary_cross_entropy_with_logits(pred_image, supervision_image)
         if self.use_dice:
             loss += dice_loss(pred_image_sigmoid[:, 0], supervision_image[:, 0], multiclass=False)
-        
+        if self.use_soft_argmax:
+            loss += self.coord_loss_weight * nn.functional.l1_loss(
+                ue_location_pred_y_x, ue_loc_y_x.to(ue_location_pred_y_x.dtype)
+            )
+
         metrics = {
             "loss": loss,
             **{acc: acc_val.to('cpu').detach() for acc, acc_val in accuracies.items()},
             'mse_meters': mse_meters.to('cpu').detach(),
         }
-        
+
         return metrics
     
     @classmethod
