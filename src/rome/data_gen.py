@@ -29,6 +29,18 @@ warnings.filterwarnings("ignore")
 # TODO only crop here. Radio stuff should be done in info json creator
 # TODO or directly create the info json for each dataset type here
 class DataGen:
+    @staticmethod
+    def _normalize_col_name(col_name: str) -> str:
+        return "".join(ch for ch in str(col_name).lower() if ch.isalnum())
+    
+    @staticmethod
+    def _resolve_column_name(columns, candidates: list[str]) -> str | None:
+        normalized_to_original = {DataGen._normalize_col_name(col): col for col in columns}
+        for candidate in candidates:
+            resolved = normalized_to_original.get(DataGen._normalize_col_name(candidate))
+            if resolved is not None:
+                return resolved
+        return None
     
     def __init__(
         self,
@@ -76,10 +88,25 @@ class DataGen:
         else:
             self.simulated = False
             mat = loadmat(mat_file)
-            cell_df = pd.read_excel(cell_file)[[
-                "Name", "eNodeID" if oslo else "eNodeBID", "Latitude", "Longitude", "PosErrorDirection",
-                "PosErrorLambda1", "PosErrorLambda2", "MNC", "TowerID"
-            ]]
+            cell_df = pd.read_excel(cell_file)
+            self.cell_enode_col = self._resolve_column_name(cell_df.columns, ["eNodeID", "eNodeBID"])
+            if self.cell_enode_col is None:
+                raise KeyError(
+                    f"Could not find eNode column in {cell_file}. "
+                    f"Expected one of ['eNodeID', 'eNodeBID'], got {list(cell_df.columns)}"
+                )
+            required_columns = [
+                "Name",
+                self.cell_enode_col,
+                "Latitude",
+                "Longitude",
+                "PosErrorDirection",
+                "PosErrorLambda1",
+                "PosErrorLambda2",
+                "MNC",
+                "TowerID",
+            ]
+            cell_df = cell_df[required_columns]
             
             self.info_df = self.merge_cell_data(mat, cell_df)
             self.info_df = self.info_df[~self.info_df.isnull().any(axis=1)]
@@ -193,13 +220,48 @@ class DataGen:
         cell_df["NPCI"] = pd.to_numeric(cell_df["NPCI"])
         cell_df.rename(columns={"Latitude": "cellLatitude", "Longitude": "cellLongitude"}, inplace=True)
         
-        merged_df = pd.merge(
+        strict_merged_df = pd.merge(
             data_df,
-            cell_df[["eNodeID" if self.oslo else "eNodeBID", "MNC", "NPCI", "cellLatitude", "cellLongitude"]],
+            cell_df[[self.cell_enode_col, "MNC", "NPCI", "cellLatitude", "cellLongitude"]],
             left_on=["eNode ID" if self.oslo else "eNodeB ID", "MNC", "NPCI"],
-            right_on=["eNodeID" if self.oslo else "eNodeBID", "MNC", "NPCI"],
+            right_on=[self.cell_enode_col, "MNC", "NPCI"],
             how="left"
         )
+        merged_df = strict_merged_df
+        
+        strict_valid_rows = (
+            strict_merged_df["cellLongitude"].notna() & (strict_merged_df["cellLongitude"] != 0)
+        ).sum()
+        if self.oslo and strict_valid_rows == 0:
+            log.warning(
+                "No strict Oslo cell matches with keys (eNode, MNC, NPCI). "
+                "Falling back to unambiguous (MNC, NPCI) matches."
+            )
+            singleton_pair_counts = cell_df.groupby(["MNC", "NPCI"]).size()
+            singleton_pairs = singleton_pair_counts[singleton_pair_counts == 1].index
+            fallback_cell_df = (
+                cell_df
+                .set_index(["MNC", "NPCI"])
+                .loc[singleton_pairs]
+                .reset_index()[[self.cell_enode_col, "MNC", "NPCI", "cellLatitude", "cellLongitude"]]
+            )
+            merged_df = pd.merge(
+                data_df,
+                fallback_cell_df,
+                left_on=["MNC", "NPCI"],
+                right_on=["MNC", "NPCI"],
+                how="left"
+            )
+            log.info(
+                "Fallback Oslo merge recovered %d/%d rows.",
+                int(merged_df["cellLongitude"].notna().sum()),
+                len(merged_df),
+            )
+        # Keep both aliases to avoid downstream branching failures caused by source naming differences.
+        if "eNodeID" not in merged_df.columns and "eNodeBID" in merged_df.columns:
+            merged_df["eNodeID"] = merged_df["eNodeBID"]
+        if "eNodeBID" not in merged_df.columns and "eNodeID" in merged_df.columns:
+            merged_df["eNodeBID"] = merged_df["eNodeID"]
         merged_df = merged_df[~merged_df["cellLongitude"].isna()]
         merged_df = merged_df[merged_df["cellLongitude"] != 0]
         
