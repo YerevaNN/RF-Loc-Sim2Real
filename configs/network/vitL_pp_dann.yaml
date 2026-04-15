@@ -27,6 +27,7 @@ pre_out_channels: 3
 pretrained: facebook/dinov2-large
 model_type: dino_v2
 use_pe: False
+dino_pre_softmax_mask: True
 
 # DANN
 domain_hidden_dim: 128

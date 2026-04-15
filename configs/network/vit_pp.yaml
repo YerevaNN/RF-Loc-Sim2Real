@@ -22,3 +22,4 @@ pretrained: facebook/dinov2-base
 
 model_type: dino_v2
 use_pe: False
+dino_pre_softmax_mask: True

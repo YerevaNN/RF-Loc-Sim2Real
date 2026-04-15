@@ -20,3 +20,4 @@ pre_out_channels: 3
 pretrained: facebook/dinov2-large
 
 model_type: dino_v2
+dino_pre_softmax_mask: True

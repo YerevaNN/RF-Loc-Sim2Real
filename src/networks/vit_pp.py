@@ -62,11 +62,12 @@ class ViTPlusPlus(nn.Module):
     def __init__(
         self, mlp_input_dim: int, image_size: int, v_num_channels: int, v_patch_size: int,
         v_hidden_size: int, v_num_hidden_layers: int, v_num_attention_heads: int, pretrained: str,
-        model_type: Literal["clip", "dino_v2"], use_pe: bool
+        model_type: Literal["clip", "dino_v2"], use_pe: bool, dino_pre_softmax_mask: bool = True
     ):
         super().__init__()
         self.model_type = model_type
         self.v_num_layers = v_num_hidden_layers
+        self.dino_pre_softmax_mask = dino_pre_softmax_mask
         vit_config = dict(
             image_size=image_size,
             num_channels=v_num_channels, patch_size=v_patch_size,
@@ -77,7 +78,8 @@ class ViTPlusPlus(nn.Module):
             self.vit = Dinov2Model(Dinov2Config(**vit_config))
             if pretrained:
                 self.vit: Dinov2Model = self.vit.from_pretrained(pretrained, output_hidden_states=True)
-            _patch_dinov2_attention(self.vit)
+            if self.dino_pre_softmax_mask:
+                _patch_dinov2_attention(self.vit)
         else:
             self.vit = CLIPVisionModel(CLIPVisionConfig(**vit_config))
             if pretrained:
@@ -130,6 +132,7 @@ class ViTPlusPlus(nn.Module):
             img_embeddings = self.vit.embeddings(pixel_values, bool_masked_pos=None)
 
         attn_bias = None
+        dino_head_mask = None
         if sequence is not None:
             # noinspection PyUnboundLocalVariable
             embeddings = torch.cat([img_embeddings, sequence_embedding], dim=1)
@@ -148,14 +151,18 @@ class ViTPlusPlus(nn.Module):
                 pair_mask = torch.matmul(pair_mask.transpose(1, 2), pair_mask)  # [B, seq, seq]
                 attn_bias = pair_mask.unsqueeze(1).to(torch.bool)  # [B, 1, seq, seq]
             else:
-                # DINOv2: build additive bias — 0 for real, -inf for padding
-                # We only need to mask the *key* dimension: a real query attending
-                # to a padding key should be blocked.  Padding queries are discarded
-                # after the encoder so their output doesnt matter, but masking them
-                # too is harmless and keeps things symmetric.
-                # Shape: [B, 1, 1, seq_len] — broadcasts over (heads, query_pos)
-                attn_bias = (1.0 - token_mask).unsqueeze(1).unsqueeze(1) * (-1e9)
-                # attn_bias[b, :, :, j] == -1e9  when token j is padding
+                if self.dino_pre_softmax_mask:
+                    # DINOv2: build additive bias — 0 for real, -inf for padding
+                    # Shape: [B, 1, 1, seq_len] — broadcasts over (heads, query_pos)
+                    attn_bias = (1.0 - token_mask).unsqueeze(1).unsqueeze(1) * (-1e9)
+                    # attn_bias[b, :, :, j] == -1e9 when token j is padding
+                else:
+                    # Legacy behavior: use post-softmax head_mask in the encoder.
+                    pair_mask = token_mask.unsqueeze(1)
+                    pair_mask = torch.matmul(pair_mask.transpose(1, 2), pair_mask)
+                    dino_head_mask = (
+                        pair_mask.unsqueeze(0).repeat(self.v_num_layers, 1, 1, 1).unsqueeze(2)
+                    )
         else:
             embeddings = img_embeddings
 
@@ -171,9 +178,13 @@ class ViTPlusPlus(nn.Module):
             encoder_outputs = self.vit.vision_model.encoder(**encoder_params)
         else:
             encoder_params["hidden_states"] = embeddings
-            self._set_attn_bias(attn_bias)
-            encoder_outputs = self.vit.encoder(**encoder_params)
-            self._set_attn_bias(None)
+            if self.dino_pre_softmax_mask:
+                self._set_attn_bias(attn_bias)
+                encoder_outputs = self.vit.encoder(**encoder_params)
+                self._set_attn_bias(None)
+            else:
+                encoder_params["head_mask"] = dino_head_mask
+                encoder_outputs = self.vit.encoder(**encoder_params)
 
         last_hidden_state = encoder_outputs[0]
         pooled_output = last_hidden_state[:, 0, :]

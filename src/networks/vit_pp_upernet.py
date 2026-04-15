@@ -31,7 +31,8 @@ class ViTPlusPlusUPerNet(nn.Module):
         pre_out_channels: int,
         model_type: Literal["clip", "dino_v2"],
         pretrained: str,
-        use_pe: bool
+        use_pe: bool,
+        dino_pre_softmax_mask: bool = True
     ):
         super().__init__()
         
@@ -43,7 +44,7 @@ class ViTPlusPlusUPerNet(nn.Module):
             v_num_channels=v_num_channels, v_patch_size=v_patch_size,
             v_hidden_size=v_hidden_size, v_num_hidden_layers=v_num_hidden_layers,
             v_num_attention_heads=v_num_attention_heads, model_type=model_type, pretrained=pretrained,
-            use_pe=use_pe
+            use_pe=use_pe, dino_pre_softmax_mask=dino_pre_softmax_mask
         )
         self.res_hidden_states = res_hidden_states
         self.use_upernet = use_upernet

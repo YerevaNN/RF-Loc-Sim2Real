@@ -50,6 +50,7 @@ class ViTPlusPlusDANN(nn.Module):
         model_type: Literal["clip", "dino_v2"],
         pretrained: str,
         use_pe: bool,
+        dino_pre_softmax_mask: bool = True,
         domain_hidden_dim: int = 128,
     ):
         super().__init__()
@@ -74,6 +75,7 @@ class ViTPlusPlusDANN(nn.Module):
             model_type=model_type,
             pretrained=pretrained,
             use_pe=use_pe,
+            dino_pre_softmax_mask=dino_pre_softmax_mask,
         )
 
         # GRL for domain adaptation
