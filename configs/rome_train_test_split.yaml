@@ -18,7 +18,7 @@ easy_train: 0.99
 easy_test: 0.5
 
 hard_margin_meters: 601
-drop_overlapping_bboxes: True
+remove_data_leak_bboxes: True
 overlap_precheck_half_square_size_meters: 800
 
 hydra:

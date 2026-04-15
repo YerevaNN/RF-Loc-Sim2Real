@@ -28,8 +28,9 @@ class DataSplit:
         easy_test: float,
         hard_val_nsew: list,
         hard_margin_meters: float,
-        drop_overlapping_bboxes: bool,
-        overlap_precheck_half_square_size_meters: float,
+        drop_overlapping_bboxes: bool = True,
+        remove_data_leak_bboxes: bool | None = None,
+        overlap_precheck_half_square_size_meters: float = 0.0,
         random_state: int = 42,
     ):
         with open(json_path, "r") as file:
@@ -56,7 +57,11 @@ class DataSplit:
         self.hard_val_nsew = hard_val_nsew
         self.hard_margin_meters = hard_margin_meters
         
-        self.drop_overlapping_bboxes = drop_overlapping_bboxes
+        # Keep backward compatibility with `drop_overlapping_bboxes` while exposing
+        # a clearer switch for leakage-prevention behavior.
+        self.drop_overlapping_bboxes = (
+            drop_overlapping_bboxes if remove_data_leak_bboxes is None else remove_data_leak_bboxes
+        )
         self.overlap_precheck_buffer_meters = 2 * overlap_precheck_half_square_size_meters * math.sqrt(2)
         self.random_state = random_state
     
@@ -338,6 +343,10 @@ class DataSplit:
 
 
 def train_test_val(config: DictConfig) -> None:
+    remove_data_leak_bboxes = config.get(
+        "remove_data_leak_bboxes",
+        config.get("drop_overlapping_bboxes", True),
+    )
     train_test_splitter = DataSplit(
         json_path=os.path.join(config["out_dir"], f"info_{config.get('dataset_type', 'dataSet')}.json"),
         data_out_dir=config["out_dir"],
@@ -352,6 +361,7 @@ def train_test_val(config: DictConfig) -> None:
         hard_val_nsew=config["hard_val_nsew"],
         hard_margin_meters=config["hard_margin_meters"],
         drop_overlapping_bboxes=config.get("drop_overlapping_bboxes", True),
+        remove_data_leak_bboxes=remove_data_leak_bboxes,
         overlap_precheck_half_square_size_meters=config.get("overlap_precheck_half_square_size_meters", 0),
         random_state=config["seed"],
     )
