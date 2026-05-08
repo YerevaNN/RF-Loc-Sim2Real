@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 # noinspection PyProtectedMember
 from lightning_fabric.utilities.types import _MAP_LOCATION_TYPE, _PATH
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 from typing_extensions import Self
 
 from src.algorithms.algorithm_base import AlgorithmBase
@@ -132,6 +132,51 @@ class RomeTransformerUnet(AlgorithmBase):
         }
 
         return metrics
+
+    @staticmethod
+    def _get_expected_mlp_input_dim(network_conf: Optional[Union[str, DictConfig]]) -> Optional[int]:
+        if network_conf is None:
+            return None
+
+        network_conf = OmegaConf.create(network_conf)
+        mlp_input_dim = network_conf.get("mlp_input_dim")
+        return None if mlp_input_dim is None else int(mlp_input_dim)
+
+    @staticmethod
+    def _pad_mlp_input_weights(state_dict: dict[str, torch.Tensor], expected_input_dim: Optional[int]) -> bool:
+        if expected_input_dim is None:
+            return False
+
+        patched = False
+        for key, weight in list(state_dict.items()):
+            if not key.endswith("vit_pp.mlp.0.weight"):
+                continue
+            if not isinstance(weight, torch.Tensor) or weight.ndim != 2:
+                continue
+
+            checkpoint_input_dim = weight.shape[1]
+            if checkpoint_input_dim == expected_input_dim:
+                continue
+            if checkpoint_input_dim > expected_input_dim:
+                log.warning(
+                    "Checkpoint parameter %s has input dim %s, but the configured model expects %s.",
+                    key,
+                    checkpoint_input_dim,
+                    expected_input_dim,
+                )
+                continue
+
+            padding = weight.new_zeros(weight.shape[0], expected_input_dim - checkpoint_input_dim)
+            state_dict[key] = torch.cat([weight, padding], dim=1)
+            log.info(
+                "Padded checkpoint parameter %s from input dim %s to %s with zero weights.",
+                key,
+                checkpoint_input_dim,
+                expected_input_dim,
+            )
+            patched = True
+
+        return patched
     
     @classmethod
     def load_from_checkpoint(
@@ -144,8 +189,12 @@ class RomeTransformerUnet(AlgorithmBase):
     ) -> Self:
         checkpoint = torch.load(checkpoint_path, map_location=map_location)
         state_dict = {k.replace("_network", "network_field"): v for k, v in checkpoint["state_dict"].items()}
+        patched = cls._pad_mlp_input_weights(
+            state_dict,
+            cls._get_expected_mlp_input_dim(kwargs.get("network_conf")),
+        )
         
-        if state_dict.keys() != checkpoint["state_dict"].keys():
+        if patched or state_dict.keys() != checkpoint["state_dict"].keys():
             checkpoint["state_dict"] = state_dict
         
         buffer = io.BytesIO()
