@@ -6,6 +6,7 @@ from sklearn.preprocessing import StandardScaler
 from torch.utils.data import DataLoader, DistributedSampler
 
 from src.datamodules.datasets import RomeDataset
+from src.datamodules.samplers import RandomSubsetPerEpochSampler
 from src.datamodules.wair_d_base import DatamoduleBase
 
 
@@ -17,6 +18,7 @@ class RomeDatamodule(DatamoduleBase):
         medium_val_json_paths: list[str], medium_test_json_paths: list[str],
         easy_val_json_paths: list[str], easy_test_json_paths: list[str], dataset_main_paths: list[str],
         hard_train_ratio: float, dataset_types: list[str],
+        val_sample_ratio: float = 0.15,
         multi_gpu: bool = False, *args, **kwargs
     ):
         self.batch_size = batch_size
@@ -36,6 +38,7 @@ class RomeDatamodule(DatamoduleBase):
         
         self.hard_train_ratio = hard_train_ratio
         self.dataset_types = dataset_types
+        self.val_sample_ratio = val_sample_ratio
         
         self.dataset_main_paths = dataset_main_paths
         self.multi_gpu = multi_gpu
@@ -192,28 +195,32 @@ class RomeDatamodule(DatamoduleBase):
             sampler=sampler, shuffle=None if self.multi_gpu else True, collate_fn=self.collate_fn,
             drop_last=True
         )
+
+    def _validation_sampler(self, dataset: RomeDataset) -> RandomSubsetPerEpochSampler:
+        val_samples_per_loader = int(len(self.train_set_field) * self.val_sample_ratio)
+        return RandomSubsetPerEpochSampler(
+            dataset,
+            num_samples=val_samples_per_loader,
+            drop_last=self.drop_last,
+            num_replicas=None if self.multi_gpu else 1,
+            rank=None if self.multi_gpu else 0,
+        )
     
     def val_dataloader(self) -> list[DataLoader]:
         # noinspection DuplicatedCode
         self.dataloader_val_hard = DataLoader(
             self.hard_val_set_field, batch_size=self.batch_size, num_workers=self.num_workers,
-            sampler=DistributedSampler(
-                self.hard_val_set_field, shuffle=False, drop_last=self.drop_last
-            ) if self.multi_gpu else None,
+            sampler=self._validation_sampler(self.hard_val_set_field),
             collate_fn=self.collate_fn, drop_last=self.drop_last
         )
         self.dataloader_val_medium = DataLoader(
             self.medium_val_set_field, batch_size=self.batch_size, num_workers=self.num_workers,
-            sampler=DistributedSampler(
-                self.medium_val_set_field, shuffle=False, drop_last=self.drop_last
-            ) if self.multi_gpu else None,
+            sampler=self._validation_sampler(self.medium_val_set_field),
             collate_fn=self.collate_fn, drop_last=self.drop_last
         )
         self.dataloader_val_easy = DataLoader(
             self.easy_val_set_field, batch_size=self.batch_size, num_workers=self.num_workers,
-            sampler=DistributedSampler(
-                self.easy_val_set_field, shuffle=False, drop_last=self.drop_last
-            ) if self.multi_gpu else None,
+            sampler=self._validation_sampler(self.easy_val_set_field),
             collate_fn=self.collate_fn, drop_last=self.drop_last
         )
         return [self.dataloader_val_hard, self.dataloader_val_medium, self.dataloader_val_easy]

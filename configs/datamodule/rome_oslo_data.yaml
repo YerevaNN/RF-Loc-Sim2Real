@@ -59,3 +59,4 @@ eps_image: 3
 for_viz: False
 map_channels: buildings # buildings, roads, both
 crops_per_epoch: 5
+val_sample_ratio: 0.15

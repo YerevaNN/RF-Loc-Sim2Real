@@ -217,3 +217,7 @@ slurm_*
 run_*
 count_valid_crops.py
 cache
+
+**tmp**
+stats/
+notebooks/

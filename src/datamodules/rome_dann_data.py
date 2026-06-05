@@ -7,6 +7,7 @@ from sklearn.preprocessing import StandardScaler
 from torch.utils.data import DataLoader, Dataset, DistributedSampler
 
 from src.datamodules.datasets import RomeDataset
+from src.datamodules.samplers import RandomSubsetPerEpochSampler
 from src.datamodules.wair_d_base import DatamoduleBase
 
 
@@ -73,6 +74,7 @@ class RomeDANNDatamodule(DatamoduleBase):
         target_hard_train_ratio: float,
         # Shared parameters
         dataset_types: list[str],
+        val_sample_ratio: float = 0.15,
         multi_gpu: bool = False,
         *args,
         **kwargs
@@ -111,6 +113,7 @@ class RomeDANNDatamodule(DatamoduleBase):
         
         # Shared parameters
         self.dataset_types = dataset_types
+        self.val_sample_ratio = val_sample_ratio
         self.multi_gpu = multi_gpu
         
         # Source domain datasets
@@ -386,6 +389,16 @@ class RomeDANNDatamodule(DatamoduleBase):
             collate_fn=self.dann_collate_fn,
             drop_last=True
         )
+
+    def _validation_sampler(self, dataset: RomeDataset) -> RandomSubsetPerEpochSampler:
+        val_samples_per_loader = int(len(self.source_train_set_field) * self.val_sample_ratio)
+        return RandomSubsetPerEpochSampler(
+            dataset,
+            num_samples=val_samples_per_loader,
+            drop_last=self.drop_last,
+            num_replicas=None if self.multi_gpu else 1,
+            rank=None if self.multi_gpu else 0,
+        )
     
     def val_dataloader(self) -> list[DataLoader]:
         """
@@ -397,9 +410,7 @@ class RomeDANNDatamodule(DatamoduleBase):
             self.source_hard_val_set_field,
             batch_size=self.batch_size,
             num_workers=self.num_workers,
-            sampler=DistributedSampler(
-                self.source_hard_val_set_field, shuffle=False, drop_last=self.drop_last
-            ) if self.multi_gpu else None,
+            sampler=self._validation_sampler(self.source_hard_val_set_field),
             collate_fn=self.collate_fn,
             drop_last=self.drop_last
         )
@@ -407,9 +418,7 @@ class RomeDANNDatamodule(DatamoduleBase):
             self.source_medium_val_set_field,
             batch_size=self.batch_size,
             num_workers=self.num_workers,
-            sampler=DistributedSampler(
-                self.source_medium_val_set_field, shuffle=False, drop_last=self.drop_last
-            ) if self.multi_gpu else None,
+            sampler=self._validation_sampler(self.source_medium_val_set_field),
             collate_fn=self.collate_fn,
             drop_last=self.drop_last
         )
@@ -417,9 +426,7 @@ class RomeDANNDatamodule(DatamoduleBase):
             self.source_easy_val_set_field,
             batch_size=self.batch_size,
             num_workers=self.num_workers,
-            sampler=DistributedSampler(
-                self.source_easy_val_set_field, shuffle=False, drop_last=self.drop_last
-            ) if self.multi_gpu else None,
+            sampler=self._validation_sampler(self.source_easy_val_set_field),
             collate_fn=self.collate_fn,
             drop_last=self.drop_last
         )
@@ -429,9 +436,7 @@ class RomeDANNDatamodule(DatamoduleBase):
             self.target_hard_val_set_field,
             batch_size=self.batch_size,
             num_workers=self.num_workers,
-            sampler=DistributedSampler(
-                self.target_hard_val_set_field, shuffle=False, drop_last=self.drop_last
-            ) if self.multi_gpu else None,
+            sampler=self._validation_sampler(self.target_hard_val_set_field),
             collate_fn=self.collate_fn,
             drop_last=self.drop_last
         )
@@ -439,9 +444,7 @@ class RomeDANNDatamodule(DatamoduleBase):
             self.target_medium_val_set_field,
             batch_size=self.batch_size,
             num_workers=self.num_workers,
-            sampler=DistributedSampler(
-                self.target_medium_val_set_field, shuffle=False, drop_last=self.drop_last
-            ) if self.multi_gpu else None,
+            sampler=self._validation_sampler(self.target_medium_val_set_field),
             collate_fn=self.collate_fn,
             drop_last=self.drop_last
         )
@@ -449,9 +452,7 @@ class RomeDANNDatamodule(DatamoduleBase):
             self.target_easy_val_set_field,
             batch_size=self.batch_size,
             num_workers=self.num_workers,
-            sampler=DistributedSampler(
-                self.target_easy_val_set_field, shuffle=False, drop_last=self.drop_last
-            ) if self.multi_gpu else None,
+            sampler=self._validation_sampler(self.target_easy_val_set_field),
             collate_fn=self.collate_fn,
             drop_last=self.drop_last
         )
