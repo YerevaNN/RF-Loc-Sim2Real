@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 
 import math
 from torch.optim import Optimizer
@@ -6,58 +6,78 @@ from torch.optim.lr_scheduler import LRScheduler
 
 
 class LinearWarmupCosineAnnealingLR(LRScheduler):
-    
+    """
+    Learning rate scheduler with linear warmup followed by cosine decay.
+
+    The schedule is parameterized in epochs by default. When ``interval='step'``,
+    epoch counts are converted to steps using ``steps_per_epoch``.
+    """
+
     def __init__(
         self,
         optimizer: Optimizer,
         warmup_epochs: int,
-        max_epochs: int,
+        max_epochs: Optional[int],
         warmup_start_lr: float,
         warmup_end_lr: float,
         eta_min: float,
         last_epoch: int,
+        decay_epochs: Optional[int] = None,
+        interval: str = 'epoch',
+        steps_per_epoch: int = None,
     ) -> None:
-        self.warmup_epochs = warmup_epochs
-        self.max_epochs = max_epochs
+        if decay_epochs is None:
+            if max_epochs is None:
+                raise ValueError("Either decay_epochs or max_epochs must be provided")
+            decay_epochs = max_epochs - warmup_epochs
+
+        if decay_epochs <= 0:
+            raise ValueError("decay_epochs must be positive")
+        if max_epochs is not None and warmup_epochs + decay_epochs > max_epochs:
+            raise ValueError("warmup_epochs + decay_epochs must be less than or equal to max_epochs")
+
+        self.interval = interval
+        if self.interval == 'step':
+            if steps_per_epoch is None:
+                raise ValueError("steps_per_epoch must be provided for step-based scheduling")
+            self.warmup_steps = warmup_epochs * steps_per_epoch
+            self.decay_steps = decay_epochs * steps_per_epoch
+            self.max_steps = (max_epochs if max_epochs is not None else warmup_epochs + decay_epochs) * steps_per_epoch
+        else:
+            self.warmup_steps = warmup_epochs
+            self.decay_steps = decay_epochs
+            self.max_steps = max_epochs if max_epochs is not None else warmup_epochs + decay_epochs
+
         self.warmup_start_lr = warmup_start_lr
         self.warmup_end_lr = warmup_end_lr
         self.eta_min = eta_min
-        self.cosine_start_lr = warmup_end_lr
-        self.cosine_end_lr = eta_min
-        
+
         super().__init__(optimizer, last_epoch)
-    
-    def get_lr(self) -> List[float]:
-        if cur_epoch < self.warmup_epochs:
-            return [
+
+    def _compute_lr(self, current_step: int) -> float:
+        if self.warmup_steps > 0 and current_step < self.warmup_steps:
+            return (
                 self.warmup_start_lr
                 + (self.warmup_end_lr - self.warmup_start_lr)
-                * (cur_epoch / (self.warmup_epochs - 1))
-                for _ in self.base_lrs
-            ]
-        else:
-            return [
-                self.eta_min + 0.5 * (self.warmup_end_lr - self.eta_min) * (1 + math.cos(
-                    math.pi * (cur_epoch - self.warmup_epochs) / (self.max_epochs - self.warmup_epochs)
-                ))
-                for _ in self.base_lrs
-            ]
-    
+                * current_step / max(1, self.warmup_steps - 1)
+            )
+
+        decay_start_step = self.warmup_steps
+        decay_end_step = decay_start_step + self.decay_steps
+        if current_step >= decay_end_step:
+            return self.eta_min
+
+        decay_progress = (current_step - decay_start_step) / max(1, self.decay_steps - 1)
+        return self.eta_min + 0.5 * (self.warmup_end_lr - self.eta_min) * (
+            1 + math.cos(math.pi * decay_progress)
+        )
+
+    def get_lr(self) -> List[float]:
+        current_step = self.last_epoch
+        return [self._compute_lr(current_step) for _ in self.base_lrs]
+
     def get_closed_form_lr(self) -> List[float]:
-        if cur_epoch < self.warmup_epochs:
-            return [
-                self.warmup_start_lr
-                + cur_epoch
-                * (self.warmup_end_lr - self.warmup_start_lr)
-                / max(1, self.warmup_epochs - 1)
-                for _ in self.base_lrs
-            ]
-        return [
-            self.eta_min + 0.5 * (self.warmup_end_lr - self.eta_min) * (1 + math.cos(
-                math.pi * (cur_epoch - self.warmup_epochs) / (self.max_epochs - self.warmup_epochs)
-            ))
-            for _ in self.base_lrs
-        ]
+        return [self._compute_lr(self.last_epoch) for _ in self.base_lrs]
 
 
 class WarmupStableDecayLR(LRScheduler):
@@ -134,4 +154,3 @@ class WarmupStableDecayLR(LRScheduler):
             * (current_step - decay_start_step + 1) / self.decay_steps
             for _ in self.base_lrs
         ]
-

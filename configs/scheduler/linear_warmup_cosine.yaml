@@ -1,8 +1,10 @@
 _target_: src.utils.LinearWarmupCosineAnnealingLR
 
 warmup_epochs: 30
+decay_epochs: null
 max_epochs: ${trainer.max_epochs}
 warmup_start_lr: 0
 warmup_end_lr: 2e-4
 eta_min: 0.0
 last_epoch: -1
+interval: 'step' # 'step' or 'epoch'
