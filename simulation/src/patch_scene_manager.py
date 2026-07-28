@@ -106,9 +106,58 @@ class PatchSceneManager:
         patch_info['center_point'] = center_point
         with open(info_path, 'w') as f:
             json.dump(patch_info, f, indent=2)
-        
+
+        # Persist per-building footprint (local frame) + roof height so the
+        # constrained-BS placer can drop synthetic BS on rooftops at capped
+        # height. Source of truth for "where are roofs and how tall".
+        self._write_buildings_json(patch_dir, patch_idx, patch_bounds,
+                                   center_point, building_geometries)
+
         logger.info(f"Generated scene for patch {patch_idx}: {xml_path}")
         return Path(xml_path)
+
+    def _write_buildings_json(self, patch_dir: Path, patch_idx: int, patch_bounds: Dict,
+                              center_point, building_geometries: List[Dict]) -> Path:
+        """Dump building footprints + heights to <patch_dir>/buildings.json.
+
+        Footprints are stored in the scene's LOCAL METER frame (origin = patch
+        center), identical to the PLY meshes and the road/UE sampler frame, so
+        consumers can place/test points without re-deriving a transform. Roof
+        height is the OSM-derived per-building height used to build the mesh.
+        center_point is (center_lat, center_lon).
+        """
+        center_lat, center_lon = float(center_point[0]), float(center_point[1])
+        buildings = []
+        for b in building_geometries:
+            ext = [[float(x), float(y)] for (x, y) in b.get('exterior', [])]
+            if len(ext) >= 3:
+                # Interior rings (courtyards/holes) are kept so the BS placer
+                # can build Polygon(exterior, holes) and never place a rooftop
+                # BS over an open courtyard void.
+                interiors = [
+                    [[float(x), float(y)] for (x, y) in ring]
+                    for ring in b.get('interiors', []) if len(ring) >= 3
+                ]
+                buildings.append({
+                    'id': b.get('id'),
+                    'height': float(b.get('height', 10.0)),
+                    'exterior_local': ext,
+                    'interiors_local': interiors,
+                })
+        out = {
+            'patch_idx': int(patch_idx),
+            'center_lat': center_lat,
+            'center_lon': center_lon,
+            'lat_range': list(patch_bounds['lat_range']),
+            'lon_range': list(patch_bounds['lon_range']),
+            'num_buildings': len(buildings),
+            'buildings': buildings,
+        }
+        bpath = patch_dir / "buildings.json"
+        with open(bpath, 'w') as f:
+            json.dump(out, f)
+        logger.info(f"Wrote {len(buildings)} building footprints -> {bpath}")
+        return bpath
     
     def generate_random_bs_locations(self, patch_idx: int, num_bs: int = 15) -> List[Dict]:
         patch_bounds = self.get_patch_bounds(patch_idx)

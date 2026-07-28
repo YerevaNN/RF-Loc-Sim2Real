@@ -4,12 +4,14 @@ OPTIMIZED_PARAMS = {
     "name": "optimized_simulation",
     "frequency": int(1.2e9),  # 1.2 GHz from paper
     "tx_height": 40,
-    "max_depth": 3,
+    # "max_depth": 3,  # OLD: dropped urban NLoS chains -> ~90% sim_rssi=-140 floor (B'' diag 2026-05-14)
+    "max_depth": 5,
     "max_num_paths_per_src": int(1e4),
     "samples_per_src": int(1e6),
     "synthetic_array": False,
     "los": True,
-    "specular_reflection": False,
+    # "specular_reflection": False,  # OLD: caused ~90% floor on dense scenes
+    "specular_reflection": True,
     "diffuse_reflection": True,
     "refraction": True,
     "num_rows": 6,

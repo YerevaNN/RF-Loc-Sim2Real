@@ -80,8 +80,11 @@ class DataPipeline:
                 east = bounds['lon_range'][1] + margin
                 west = bounds['lon_range'][0] - margin
                 
+                # osmnx 2.x signature: features_from_bbox(bbox, tags) with
+                # bbox=(left, bottom, right, top); the old 4-positional form
+                # (north, south, east, west) raises TypeError on osmnx>=2.
                 buildings = ox.features.features_from_bbox(
-                    north, south, east, west, {'building': True})
+                    (west, south, east, north), {'building': True})
                 logger.info(f"Using fallback bounding box, extracted {len(buildings)} buildings")
                 
             except Exception as e2:

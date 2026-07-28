@@ -7,18 +7,32 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_CENTER_LON, DEFAULT_CENTER_LAT = 12.4622493, 41.8698541
 transformer = Transformer.from_crs("EPSG:4326", "EPSG:32633", always_xy=True)
+inv_transformer = Transformer.from_crs("EPSG:32633", "EPSG:4326", always_xy=True)
 
 
-def lonlat_to_local(lon: float, lat: float, 
+def lonlat_to_local(lon: float, lat: float,
                     center_lon: float = None, center_lat: float = None) -> Tuple[float, float]:
     if center_lon is None:
         center_lon = DEFAULT_CENTER_LON
     if center_lat is None:
         center_lat = DEFAULT_CENTER_LAT
-    
+
     x, y = transformer.transform(lon, lat)
     center_x, center_y = transformer.transform(center_lon, center_lat)
     return x - center_x, y - center_y
+
+
+def local_to_lonlat(x: float, y: float,
+                    center_lon: float = None, center_lat: float = None) -> Tuple[float, float]:
+    """Inverse of lonlat_to_local. Returns (lon, lat)."""
+    if center_lon is None:
+        center_lon = DEFAULT_CENTER_LON
+    if center_lat is None:
+        center_lat = DEFAULT_CENTER_LAT
+
+    center_x, center_y = transformer.transform(center_lon, center_lat)
+    lon, lat = inv_transformer.transform(x + center_x, y + center_y)
+    return lon, lat
 
 
 def clear_scene(scene) -> None:
@@ -37,7 +51,8 @@ def clear_receivers_only(scene) -> None:
 
 
 def add_receivers_only(scene, rx_map: Dict, Receiver=None,
-                       center_lon: float = None, center_lat: float = None) -> None:
+                       center_lon: float = None, center_lat: float = None,
+                       ue_height_m: float = 1.0) -> None:
     if Receiver is None:
         from sionna.rt import Receiver
 
@@ -45,7 +60,8 @@ def add_receivers_only(scene, rx_map: Dict, Receiver=None,
         rx_pos = lonlat_to_local(rx_lon, rx_lat, center_lon=center_lon, center_lat=center_lat)
         rx = Receiver(
             name=rx_name,
-            position=(float(rx_pos[0]), float(rx_pos[1]), 1.0),
+            # was hardcoded 1.0; now parameterised (default preserves prior behaviour)
+            position=(float(rx_pos[0]), float(rx_pos[1]), float(ue_height_m)),
             orientation=[0.0, 0.0, 0.0]
         )
         scene.add(rx)
@@ -73,9 +89,10 @@ def setup_scene_arrays(scene, params: Dict, PlanarArray=None) -> None:
     )
 
 
-def add_transmitters_receivers(scene, tx_map: Dict, rx_map: Dict, 
+def add_transmitters_receivers(scene, tx_map: Dict, rx_map: Dict,
                               params: Dict, bs_params: Dict, Transmitter=None, Receiver=None,
-                              center_lon: float = None, center_lat: float = None) -> None:
+                              center_lon: float = None, center_lat: float = None,
+                              ue_height_m: float = 1.0) -> None:
     if Transmitter is None or Receiver is None:
         from sionna.rt import Transmitter, Receiver
     
@@ -102,8 +119,9 @@ def add_transmitters_receivers(scene, tx_map: Dict, rx_map: Dict,
     for loc, (rx_idx, rx_name, rx_lat, rx_lon) in rx_map.items():
         rx_pos = lonlat_to_local(rx_lon, rx_lat, center_lon=center_lon, center_lat=center_lat)
         rx = Receiver(
-            name=rx_name, 
-            position=(float(rx_pos[0]), float(rx_pos[1]), 1.0), 
+            name=rx_name,
+            # was hardcoded 1.0; now parameterised (default preserves prior behaviour)
+            position=(float(rx_pos[0]), float(rx_pos[1]), float(ue_height_m)),
             orientation=[0.0, 0.0, 0.0]
         )
         scene.add(rx)
