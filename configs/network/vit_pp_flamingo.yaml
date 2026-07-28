@@ -1,0 +1,30 @@
+_target_: src.networks.ViTPlusPlusFlamingoUPerNet
+
+# Task
+num_classes: 1
+image_size: 224
+mlp_input_dim: 7
+
+# DINOv2-L/14 backbone (frozen, 307M params)
+v_num_channels: 3
+v_patch_size: 14
+v_hidden_size: 1024
+v_num_hidden_layers: 24
+v_num_attention_heads: 16
+pretrained: facebook/dinov2-large
+
+# Flamingo gated cross-attention
+# Injection layers match Depth Anything V2 extraction points for DINOv2-L.
+# 4-layer insertion mirrors Flamingo-80B every-4th-layer pattern.
+xattn_layers: [ 4, 11, 17, 23 ]
+d_cross: 128
+xattn_n_heads: 4
+# xattn_ffn_ratio: 0.125
+xattn_ffn_ratio: 0.125
+xattn_dropout: 0.1
+d_rf: 128
+
+# Decoder (UPerNet: PSPModule + FPN)
+decoder_dim: 256
+up_pool_scales: [ 1, 2, 4, 7 ]
+pre_out_channels: 3
