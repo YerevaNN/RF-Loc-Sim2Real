@@ -41,9 +41,15 @@ class DataGen:
         roads_gpkg_path: str,
         random_point_scale_factor: float,
         nsew: list[float],
-        workers: list[int]
+        workers: list[int],
+        min_physical_bs: int,
+        min_valid_bs: int,
+        rssi_threshold: float
     ):
         self.random_point_scale_factor = random_point_scale_factor
+        self.min_physical_bs = min_physical_bs
+        self.min_valid_bs = min_valid_bs
+        self.rssi_threshold = rssi_threshold
         self.oslo = oslo
         if sionna_csv:
             log.info(f"Reading {sionna_csv}. {mat_file} and {cell_file} are ignored.")
@@ -260,6 +266,15 @@ class DataGen:
             (self.info_df["cellLatitude"] >= float(south)) & (self.info_df["cellLatitude"] <= float(north)) &
             (self.info_df["cellLongitude"] >= float(west)) & (self.info_df["cellLongitude"] <= float(east))
         )]
+
+    def should_skip_crop_by_bs(self, unique_cells: pd.DataFrame) -> bool:
+        considered_cells = unique_cells[~unique_cells["interpolated"].fillna(False).astype(bool)]
+        if len(considered_cells) < self.min_physical_bs:
+            return True
+        valid_bs_count = pd.to_numeric(considered_cells["RSSI"], errors="coerce").gt(self.rssi_threshold).sum()
+        if valid_bs_count < self.min_valid_bs:
+            return True
+        return False
     
     def generate_plot(self, center_lat, center_lon, half_square_size, custom_crs):
         dpi = 128
@@ -386,6 +401,8 @@ class DataGen:
         if "bs_power_dbm" in corresponding_cells.columns:
             measurement_columns.append("bs_power_dbm")
         unique_cells = corresponding_cells[id_columns + measurement_columns + other_columns].drop_duplicates(id_columns)
+        if self.should_skip_crop_by_bs(unique_cells):
+            return
         
         custom_crs = DataGen.create_custom_tm_crs(center_lat, center_lon)
         try:
@@ -465,6 +482,8 @@ class DataGen:
             unique_cells = corresponding_cells[id_columns + measurement_columns + other_columns].drop_duplicates(
                 id_columns
             )
+            if self.should_skip_crop_by_bs(unique_cells):
+                continue
             
             custom_crs = DataGen.create_custom_tm_crs(center_lat, center_lon)
             try:
@@ -532,7 +551,10 @@ def generate_data(config: DictConfig) -> None:
         roads_gpkg_path=config.get("roads_gpkg_path"),
         random_point_scale_factor=config["random_point_scale_factor"],
         nsew=config["nsew"],
-        workers=workers
+        workers=workers,
+        min_physical_bs=config.get("min_physical_bs", 3),
+        min_valid_bs=config.get("min_valid_bs", 3),
+        rssi_threshold=config.get("rssi_threshold", -140.0)
     )
     log.info("Saving cell_info CSV")
     data.save_cell_info()
